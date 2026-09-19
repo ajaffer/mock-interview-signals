@@ -23,3 +23,6 @@ data/local/
 # Planning docs and agent guidance: kept local, not tracked
 docs/
 CLAUDE.md
+
+# Interview transcripts and labels: sensitive, kept local
+transcripts/
