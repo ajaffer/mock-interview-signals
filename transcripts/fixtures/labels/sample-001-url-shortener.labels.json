@@ -1,0 +1,95 @@
+{
+  "transcript_id": "sample-001",
+  "labeled_by": "synthetic-by-construction",
+  "labeling_note": "These labels were written alongside the fixture rather than by blind human review. They define what the fixture was built to contain, so they are useful as a smoke test for the replay harness but must NOT be used as evidence of signal quality.",
+  "signal_set_version": "v0.1",
+  "phase_spans": [
+    { "start_ms": 0, "end_ms": 6000, "phase": "unknown" },
+    { "start_ms": 6000, "end_ms": 113000, "phase": "requirements" },
+    { "start_ms": 113000, "end_ms": 152000, "phase": "requirements" },
+    { "start_ms": 152000, "end_ms": 242000, "phase": "high_level_design" },
+    { "start_ms": 242000, "end_ms": 354000, "phase": "high_level_design" },
+    { "start_ms": 354000, "end_ms": 396000, "phase": "data_model" },
+    { "start_ms": 396000, "end_ms": 449000, "phase": "scaling" },
+    { "start_ms": 449000, "end_ms": 548000, "phase": "scaling" },
+    { "start_ms": 548000, "end_ms": 604000, "phase": "wrap_up" }
+  ],
+  "moments": [
+    {
+      "t_ms": 195000,
+      "signal": "answered_question",
+      "truth": false,
+      "note": "Interviewer asked why 301 vs 302. Candidate answered about caching and CDN instead and never addressed the status code. The interviewer moved on without catching it -- this is the exact failure the signal exists for."
+    },
+    {
+      "t_ms": 396000,
+      "signal": "answered_question",
+      "truth": false,
+      "note": "Interviewer asked specifically about a hot partition from a viral link. Candidate answered generic sharding and read replicas, which is a different question."
+    },
+    {
+      "t_ms": 496000,
+      "signal": "answered_question",
+      "truth": true,
+      "note": "After the interviewer re-asked, the candidate answered the hot partition question directly. Signal should recover here."
+    },
+    {
+      "t_ms": 284000,
+      "signal": "tradeoff_coverage",
+      "truth": true,
+      "note": "Strong tradeoff reasoning: three options named, each weighed, choice justified, and the runner-up acknowledged as close. This is the positive case."
+    },
+    {
+      "t_ms": 152000,
+      "signal": "tradeoff_coverage",
+      "truth": false,
+      "note": "Through the estimation and initial architecture, no alternatives are weighed. Coverage should read low up to roughly the 280s mark."
+    },
+    {
+      "t_ms": 396000,
+      "signal": "rambling_risk",
+      "truth": true,
+      "note": "The sharding answer drifts into an unprompted tangent about timestamp-prefix hotspotting in time series schemas, which is off the thread and not what was asked."
+    },
+    {
+      "t_ms": 76000,
+      "signal": "clarity",
+      "truth": 5,
+      "note": "Explicit requirements summary with a well-argued availability distinction between read and write paths. High clarity."
+    },
+    {
+      "t_ms": 195000,
+      "signal": "clarity",
+      "truth": 3,
+      "note": "Fluent but unmoored from the question asked. Sounds fine, does not connect."
+    },
+    {
+      "t_ms": 284000,
+      "signal": "clarity",
+      "truth": 5,
+      "note": "Clearly structured comparison, easy to follow."
+    }
+  ],
+  "expected_suppressions": [
+    {
+      "t_ms": 3500,
+      "signal": "current_phase",
+      "reason": "Audio-check small talk. Should be 'unknown' or suppressed at cold start, not forced into 'requirements'."
+    },
+    {
+      "t_ms": 113000,
+      "signal": "rambling_risk",
+      "reason": "A 39-second estimation monologue is desirable thinking-out-loud, not rambling. Flagging this would be a false positive."
+    },
+    {
+      "t_ms": 284000,
+      "signal": "rambling_risk",
+      "reason": "A 64-second answer, the longest in the session, but it is directly responsive and well structured. Length alone must not trigger the signal."
+    },
+    {
+      "t_ms": 22000,
+      "signal": "tradeoff_coverage",
+      "reason": "Requirements phase. Signal is not evaluated before high_level_design is reached."
+    }
+  ]
+}

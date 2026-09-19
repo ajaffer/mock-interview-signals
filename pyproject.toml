@@ -1,0 +1,33 @@
+[project]
+name = "mock-interview-signals"
+version = "0.1.0"
+description = "Interviewer-side real-time signal layer for human-led mock interviews"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+jev = ["typesafe-sdk"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+mis = "mis.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

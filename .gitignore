@@ -24,5 +24,9 @@ data/local/
 docs/
 CLAUDE.md
 
-# Interview transcripts and labels: sensitive, kept local
-transcripts/
+# Interview transcripts: default-deny. Real transcripts are sensitive and must
+# never be tracked. Only synthetic fixtures are allow-listed.
+transcripts/**
+!transcripts/README.md
+!transcripts/fixtures/
+!transcripts/fixtures/**
