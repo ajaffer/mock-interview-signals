@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local env + data
+.env
+*.db
+*.sqlite3
+data/local/
+
+# Editors
+.idea/
+.vscode/
+
+# Planning docs and agent guidance: kept local, not tracked
+docs/
+CLAUDE.md
