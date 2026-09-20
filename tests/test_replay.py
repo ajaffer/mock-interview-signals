@@ -58,7 +58,7 @@ def test_replay_runs_end_to_end(transcript):
     result = replay(transcript, FakeJevAdapter(), tick_ms=15_000)
     assert result.ticks
     assert result.session.source_sha256
-    assert all(d.signal_version == "v0.1" for d in result.all_decisions)
+    assert all(d.signal_version == "v0.2" for d in result.all_decisions)
 
 
 def test_noul_decisions_never_carry_confidence(transcript):
@@ -95,8 +95,12 @@ def test_cold_start_blocks_phase_before_60s():
 
 
 def test_tradeoff_is_not_asked_during_requirements():
-    state = RollingState()
-    assert BY_NAME["tradeoff_coverage"].should_ask(state) == "phase_not_reached"
+    """tradeoff_coverage is cut from SIGNAL_SET in v0.2, so it is referenced
+    directly here. The gate is still covered for anyone re-testing the signal."""
+    from mis.signals import TRADEOFF_COVERAGE
+
+    assert TRADEOFF_COVERAGE.name not in BY_NAME, "cut signals stay out of the active set"
+    assert TRADEOFF_COVERAGE.should_ask(RollingState()) == "phase_not_reached"
 
 
 def test_session_log_persists_suppressed_decisions(transcript, tmp_path):

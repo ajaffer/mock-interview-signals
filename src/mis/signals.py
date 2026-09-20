@@ -169,6 +169,10 @@ RAMBLING_RISK = SignalSpec(
     precondition=_rambling_precondition,
 )
 
+#: CUT in v0.2. Inverted against human judgment across five real runs, and all
+#: three rewrites inverted too. Kept defined for the record and for anyone
+#: re-testing it; deliberately absent from SIGNAL_SET. See the evidence section
+#: in docs/phase-0-signal-spec.md.
 TRADEOFF_COVERAGE = SignalSpec(
     name="tradeoff_coverage",
     primitive=Primitive.NOUL,
@@ -185,12 +189,12 @@ TRADEOFF_COVERAGE = SignalSpec(
     precondition=_tradeoff_precondition,
 )
 
+
 SIGNAL_SET: tuple[SignalSpec, ...] = (
     CURRENT_PHASE,
     ANSWERED_QUESTION,
     CLARITY,
     RAMBLING_RISK,
-    TRADEOFF_COVERAGE,
 )
 
 BY_NAME: dict[str, SignalSpec] = {s.name: s for s in SIGNAL_SET}

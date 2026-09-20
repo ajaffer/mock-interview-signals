@@ -122,7 +122,7 @@ class FakeJevAdapter:
             length_pressure = min(0.3, len(candidate_text.split()) / 2000)
             return (p := min(0.95, 0.2 * drift + length_pressure)), p, None, None
 
-        if spec.name == "tradeoff_coverage":
+        if spec.name.startswith("tradeoff"):
             hits = _score_cues(candidate_text, _TRADEOFF_CUES)
             return (p := min(0.95, 0.1 + 0.22 * hits)), p, None, None
 

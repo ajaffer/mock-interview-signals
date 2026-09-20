@@ -14,7 +14,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
-SIGNAL_SET_VERSION = "v0.1"
+SIGNAL_SET_VERSION = "v0.2"
 
 
 class Speaker(StrEnum):
