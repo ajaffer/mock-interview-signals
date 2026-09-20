@@ -24,9 +24,11 @@ def test_answered_question_shows_only_the_confident_negative(noul):
     assert not high.visible, "'they answered it' earns no display slot"
 
 
-def test_rambling_needs_the_highest_bar(noul):
-    assert not SignalPolicy().apply([noul("rambling_risk", 0.70)], 60_000)[0].visible
-    assert SignalPolicy().apply([noul("rambling_risk", 0.80)], 60_000)[0].visible
+def test_rambling_threshold_sits_where_the_data_lives(noul):
+    """Recalibrated from 0.75 to 0.28. Real answers span 0.05-0.48, so the
+    original bar was above every reading the model has ever produced."""
+    assert not SignalPolicy().apply([noul("rambling_risk", 0.20)], 60_000)[0].visible
+    assert SignalPolicy().apply([noul("rambling_risk", 0.35)], 60_000)[0].visible
 
 
 def test_rambling_is_rate_limited(noul):

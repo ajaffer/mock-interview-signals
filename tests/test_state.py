@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from mis.models import Phase, Speaker, TranscriptChunk
-from mis.state import WINDOW_MS, RollingState
+from mis.state import QUESTION_RETAIN_MS, WINDOW_MS, RollingState
 
 
 def _chunk(i, ms, speaker, text):
@@ -28,12 +28,33 @@ def test_outstanding_question_is_resolved_in_code():
     assert state.ms_since_interviewer_question == 5_000
 
 
-def test_question_is_dropped_once_the_interviewer_moves_on():
+def test_question_survives_the_interviewer_moving_on():
+    """The moment the interviewer moves on is exactly when an unanswered
+    question matters most -- they did not notice the gap. Retiring it there
+    discarded the case the signal exists to catch."""
     state = RollingState()
     state.add(_chunk(0, 0, Speaker.INTERVIEWER, "How would you shard this?"))
     state.add(_chunk(1, 5_000, Speaker.CANDIDATE, "Something about replicas."))
     state.add(_chunk(2, 9_000, Speaker.INTERVIEWER, "Okay, let's move on."))
-    assert state.last_interviewer_question is None
+    assert state.last_interviewer_question is not None
+    assert state.last_interviewer_question.text == "How would you shard this?"
+
+
+def test_question_expires_after_the_retention_window():
+    state = RollingState()
+    state.add(_chunk(0, 0, Speaker.INTERVIEWER, "How would you shard this?"))
+    state.advance_to(QUESTION_RETAIN_MS - 1_000)
+    assert state.last_interviewer_question is not None
+
+    state.advance_to(QUESTION_RETAIN_MS + 1_000)
+    assert state.last_interviewer_question is None, "the interview has moved on"
+
+
+def test_a_newer_question_replaces_an_older_one():
+    state = RollingState()
+    state.add(_chunk(0, 0, Speaker.INTERVIEWER, "How would you shard this?"))
+    state.add(_chunk(1, 30_000, Speaker.INTERVIEWER, "What about the hot key?"))
+    assert state.last_interviewer_question.text == "What about the hot key?"
 
 
 def test_a_turn_counts_only_as_far_as_the_clock_has_run():

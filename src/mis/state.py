@@ -17,6 +17,11 @@ from .models import PHASE_ORDER, Phase, Speaker, TranscriptChunk
 #: How much recent transcript the model sees. Bounded on purpose.
 WINDOW_MS = 180_000
 
+#: How long an interviewer question stays outstanding. An unanswered question
+#: is not retired just because the interviewer spoke again -- that moment is
+#: precisely when the gap matters, because they moved on without noticing it.
+QUESTION_RETAIN_MS = 120_000
+
 
 @dataclass
 class RollingState:
@@ -72,15 +77,20 @@ class RollingState:
 
     @property
     def last_interviewer_question(self) -> TranscriptChunk | None:
-        """Most recent interviewer question with no later interviewer turn.
+        """Most recent interviewer question asked within QUESTION_RETAIN_MS.
 
-        Once the interviewer speaks again without asking, the previous question
-        is treated as dropped rather than outstanding -- they moved on.
+        Deliberately NOT retired when the interviewer speaks again without
+        asking. Measured over five real interviews, that rule left only 30% of
+        ticks with a question to judge, and it discarded the highest-value case:
+        the interviewer moves on, unaware the question went unanswered. Holding
+        the question for two minutes raises that to 44% and keeps that case.
         """
         for chunk in reversed(self.chunks):
-            if chunk.speaker is not Speaker.INTERVIEWER:
+            if chunk.speaker is not Speaker.INTERVIEWER or not chunk.is_question:
                 continue
-            return chunk if chunk.is_question else None
+            if self.now_ms - chunk.offset_ms > QUESTION_RETAIN_MS:
+                return None
+            return chunk
         return None
 
     @property

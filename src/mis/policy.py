@@ -29,9 +29,12 @@ ANSWERED_MAX_PROBABILITY = 0.35
 CLARITY_MIN_CONFIDENCE = 0.70
 CLARITY_MIN_DELTA = 1.0
 
-#: Highest bar in the set: a false positive makes the interviewer wrongly
-#: interrupt someone.
-RAMBLING_MIN_PROBABILITY = 0.75
+#: Calibrated to the observed distribution, NOT validated against labels.
+#: Across 102 real answers the signal spans 0.05-0.48 (p50 0.10, p95 0.28), so
+#: the original 0.75 never once fired. 0.28 makes it reachable at roughly the
+#: top 5% of readings. This is a reachability fix; whether those readings are
+#: the RIGHT moments needs human-labelled rambling, which does not exist yet.
+RAMBLING_MIN_PROBABILITY = 0.28
 RAMBLING_RATE_LIMIT_MS = 90_000
 
 TRADEOFF_MAX_PROBABILITY = 0.30
