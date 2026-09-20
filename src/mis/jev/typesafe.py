@@ -16,6 +16,13 @@ from ..signals import SignalSpec
 from .adapter import build_decision
 
 
+def _shift_levels(probabilities: dict | None) -> dict | None:
+    """Re-key a Score distribution from 0-indexed levels to 1-based ones."""
+    if not probabilities:
+        return probabilities
+    return {str(int(k) + 1): v for k, v in probabilities.items()}
+
+
 class TypeSafeJevAdapter:
     """Thin wrapper over `client.system_one`. Requires TYPESAFE_API_KEY."""
 
@@ -68,6 +75,11 @@ class TypeSafeJevAdapter:
         started = time.perf_counter()
         result = self._client.system_one(state, questions)
         latency_ms = (time.perf_counter() - started) * 1000
+        usage = getattr(result, "usage", None)
+        tokens = {
+            "request_input_tokens": getattr(usage, "input_tokens", None),
+            "request_output_tokens": getattr(usage, "output_tokens", None),
+        }
 
         decisions: list[SignalDecision] = []
         for spec in specs:
@@ -83,6 +95,7 @@ class TypeSafeJevAdapter:
                             window_start_ms=window_start_ms,
                             window_end_ms=window_end_ms,
                             latency_ms=latency_ms,
+                            **tokens,
                         )
                     )
                 case Primitive.SCORE:
@@ -90,12 +103,19 @@ class TypeSafeJevAdapter:
                     decisions.append(
                         build_decision(
                             spec,
-                            value=answer.score,
+                            # Jev returns a 0-indexed weighted mean over the
+                            # level list; the spec and the human labels use
+                            # 1-based level numbers. Normalize here so the
+                            # policy and the fake adapter agree on scale.
+                            value=answer.score + 1,
                             confidence=getattr(answer, "confidence", None),
-                            probabilities=getattr(answer, "probabilities", None),
+                            probabilities=_shift_levels(
+                                getattr(answer, "probabilities", None)
+                            ),
                             window_start_ms=window_start_ms,
                             window_end_ms=window_end_ms,
                             latency_ms=latency_ms,
+                            **tokens,
                         )
                     )
                 case Primitive.NOUL:
@@ -109,6 +129,7 @@ class TypeSafeJevAdapter:
                             window_start_ms=window_start_ms,
                             window_end_ms=window_end_ms,
                             latency_ms=latency_ms,
+                            **tokens,
                         )
                     )
         return decisions

@@ -50,6 +50,8 @@ CREATE TABLE IF NOT EXISTS signal_decisions (
     window_start_ms    INTEGER NOT NULL,
     window_end_ms      INTEGER NOT NULL,
     latency_ms         REAL,
+    in_tokens          INTEGER,
+    out_tokens         INTEGER,
     created_at         TEXT NOT NULL
 );
 
@@ -108,8 +110,8 @@ class SessionStore:
             """INSERT INTO signal_decisions
                (session_id, signal_name, signal_version, primitive, value, probability,
                 confidence, probabilities, visible, suppressed_reason, window_start_ms,
-                window_end_ms, latency_ms, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                window_end_ms, latency_ms, in_tokens, out_tokens, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 (
                     session_id,
@@ -125,6 +127,8 @@ class SessionStore:
                     d.window_start_ms,
                     d.window_end_ms,
                     d.latency_ms,
+                    d.request_input_tokens,
+                    d.request_output_tokens,
                     d.created_at.isoformat(),
                 )
                 for d in decisions

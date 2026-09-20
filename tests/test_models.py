@@ -60,3 +60,20 @@ def test_choice_may_carry_confidence():
 def test_question_detection(text, expected):
     chunk = TranscriptChunk(index=0, offset_ms=0, speaker=Speaker.INTERVIEWER, text=text)
     assert chunk.is_question is expected
+
+
+def test_score_distribution_keys_are_coerced_to_strings():
+    """Jev keys Score distributions by integer level index; Choice by option
+    name. One field has to hold both, so keys are normalized at the boundary."""
+    from mis.jev.adapter import build_decision
+    from mis.signals import CLARITY
+
+    d = build_decision(
+        CLARITY,
+        value=3.2,
+        confidence=0.8,
+        probabilities={0: 0.1, 1: 0.6, 2: 0.3},
+        window_start_ms=0,
+        window_end_ms=1,
+    )
+    assert d.probabilities == {"0": 0.1, "1": 0.6, "2": 0.3}

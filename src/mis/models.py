@@ -140,6 +140,10 @@ class SignalDecision(BaseModel):
     window_start_ms: int
     window_end_ms: int
     latency_ms: float | None = None
+    #: Tokens for the whole batched request this answer came from, not for
+    #: this signal alone -- questions share one state payload (ADR 006).
+    request_input_tokens: int | None = None
+    request_output_tokens: int | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def model_post_init(self, _context: object) -> None:

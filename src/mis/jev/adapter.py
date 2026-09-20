@@ -38,8 +38,14 @@ def build_decision(
     window_start_ms: int,
     window_end_ms: int,
     latency_ms: float | None = None,
+    request_input_tokens: int | None = None,
+    request_output_tokens: int | None = None,
 ) -> SignalDecision:
     """Normalize one answer, enforcing the per-primitive shape."""
+    if probabilities is not None:
+        # Score distributions arrive keyed by integer level index; Choice by
+        # option name. Coerce so one field holds both shapes.
+        probabilities = {str(k): float(v) for k, v in probabilities.items()}
     if spec.primitive is Primitive.NOUL:
         # A Noul's probability is its confidence. Carrying a second number here
         # would invite policy code to gate on something that does not exist.
@@ -56,4 +62,6 @@ def build_decision(
         window_start_ms=window_start_ms,
         window_end_ms=window_end_ms,
         latency_ms=latency_ms,
+        request_input_tokens=request_input_tokens,
+        request_output_tokens=request_output_tokens,
     )
