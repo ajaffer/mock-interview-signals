@@ -18,6 +18,14 @@ class TranscriptError(ValueError):
     """Raised when a transcript file cannot be read as JSONL utterances."""
 
 
+#: Above this share of unattributed utterances a transcript is refused rather
+#: than replayed. Three of the four signals need to know who is speaking, so a
+#: mostly-unlabelled transcript silently degrades the product to a phase
+#: detector -- a failure worth surfacing at import, not discovering in a report.
+#: See ADR 007.
+MAX_UNKNOWN_SPEAKER_SHARE = 0.5
+
+
 @dataclass(frozen=True)
 class LoadedTranscript:
     utterances: tuple[Utterance, ...]
@@ -74,6 +82,16 @@ def load_jsonl(path: str | Path) -> LoadedTranscript:
 
     if not utterances:
         raise TranscriptError(f"{path}: no utterances found")
+
+    unknown = sum(1 for u in utterances if u.speaker is Speaker.UNKNOWN)
+    share = unknown / len(utterances)
+    if share > MAX_UNKNOWN_SPEAKER_SHARE:
+        raise TranscriptError(
+            f"{path}: {share:.0%} of utterances have no speaker "
+            f"({unknown}/{len(utterances)}). Three of the four signals need speaker "
+            "attribution; replaying this would evaluate current_phase and nothing "
+            "else. Diarize at the capture layer (see ADR 007)."
+        )
 
     out_of_order = [
         i for i in range(1, len(utterances)) if utterances[i].t_ms < utterances[i - 1].t_ms

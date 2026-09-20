@@ -59,3 +59,22 @@ def test_chunks_are_one_per_utterance(tmp_path):
     chunks = to_chunks(loaded.utterances)
     assert [c.index for c in chunks] == [0, 1, 2]
     assert [c.offset_ms for c in chunks] == [0, 5000, 9000]
+
+
+def test_refuses_a_mostly_unlabelled_transcript(tmp_path):
+    """Raw ASR carries timestamps but no speakers. Replaying it would quietly
+    evaluate one signal and report a suppression rate as if that were normal."""
+    body = "\n".join(
+        f'{{"t_ms": {i * 1000}, "speaker": "", "text": "some speech"}}' for i in range(10)
+    )
+    with pytest.raises(TranscriptError, match="no speaker"):
+        load_jsonl(_write(tmp_path, body + "\n"))
+
+
+def test_allows_a_few_unattributed_utterances(tmp_path):
+    """Crosstalk and music stings legitimately come back unattributed."""
+    lines = [f'{{"t_ms": {i * 1000}, "speaker": "candidate", "text": "real speech"}}'
+             for i in range(8)]
+    lines += ['{"t_ms": 9000, "speaker": "", "text": "[music]"}']
+    loaded = load_jsonl(_write(tmp_path, "\n".join(lines) + "\n"))
+    assert len(loaded.utterances) == 9
