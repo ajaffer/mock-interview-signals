@@ -160,6 +160,12 @@ def _coverage(adapter: JevAdapter, chunks: list, end_ms: int) -> dict[str, str]:
     return {d.signal_name: str(d.value) for d in decisions}
 
 
+def resolve_session_id(store_path: str, session_id: str | None) -> str:
+    """Full id from a prefix, or the most recent session."""
+    row, _, _ = _load(store_path, session_id)
+    return row["id"]
+
+
 def build(store_path: str, session_id: str | None, adapter: JevAdapter | None) -> SessionReport:
     row, chunks, decisions = _load(store_path, session_id)
     if not chunks:

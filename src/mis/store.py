@@ -10,6 +10,7 @@ import json
 import sqlite3
 import threading
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .models import Session, SignalDecision, TranscriptChunk
@@ -54,6 +55,12 @@ CREATE TABLE IF NOT EXISTS signal_decisions (
     in_tokens          INTEGER,
     out_tokens         INTEGER,
     created_at         TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS reports (
+    session_id    TEXT PRIMARY KEY REFERENCES sessions(id),
+    generated_at  TEXT NOT NULL,
+    markdown      TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_decisions_session
@@ -145,6 +152,49 @@ class SessionStore:
             ],
         )
         self._conn.commit()
+
+    def save_report(self, session_id: str, markdown: str) -> None:
+        """Store the rendered report.
+
+        Regenerating costs a Jev call over the whole transcript, so re-reading
+        an old session should not pay it again. It also freezes the report at
+        the signal-set version that produced it, which matters once the set
+        changes underneath.
+        """
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO reports (session_id, generated_at, markdown) "
+                "VALUES (?,?,?)",
+                (session_id, datetime.now(UTC).isoformat(), markdown),
+            )
+            self._conn.commit()
+
+    def load_report(self, session_id: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT markdown FROM reports WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        return row["markdown"] if row else None
+
+    def sessions(self) -> list[sqlite3.Row]:
+        """Recorded sessions, newest first, with enough to pick one out."""
+        return list(self._conn.execute("""
+            SELECT s.*,
+                   (SELECT COUNT(*) FROM transcript_chunks c WHERE c.session_id = s.id)
+                       AS chunks,
+                   (SELECT MAX(offset_ms) FROM transcript_chunks c WHERE c.session_id = s.id)
+                       AS duration_ms,
+                   (SELECT COUNT(*) FROM signal_decisions d
+                     WHERE d.session_id = s.id AND d.visible = 1) AS shown,
+                   (SELECT COUNT(*) FROM reports r WHERE r.session_id = s.id) AS has_report
+              FROM sessions s
+             ORDER BY s.started_at DESC
+        """))
+
+    def set_notes(self, session_id: str, notes: str) -> None:
+        with self._lock:
+            self._conn.execute("UPDATE sessions SET notes = ? WHERE id = ?",
+                               (notes, session_id))
+            self._conn.commit()
 
     def decisions(self, session_id: str, *, visible_only: bool = False) -> list[sqlite3.Row]:
         sql = "SELECT * FROM signal_decisions WHERE session_id = ?"

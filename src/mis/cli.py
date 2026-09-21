@@ -60,6 +60,43 @@ def _print_report(result: ReplayResult, *, show_suppressed: bool) -> None:
             print(f"  {count:>4}x  {key}")
 
 
+def _sessions(args) -> int:
+    from .report import resolve_session_id
+
+    if not args.db.exists():
+        print(f"{args.db} does not exist. Sessions record automatically when you run "
+              f"'mis live'.", file=sys.stderr)
+        return 2
+
+    store = SessionStore(args.db)
+    try:
+        if args.note:
+            target, text = args.note
+            sid = resolve_session_id(str(args.db), target)
+            store.set_notes(sid, text)
+            print(f"noted on {sid}")
+            return 0
+
+        rows = store.sessions()
+        if not rows:
+            print("no sessions recorded yet")
+            return 0
+
+        print(f"{'id':<14}{'when':<18}{'source':<9}{'length':>8}{'shown':>7}"
+              f"{'report':>8}  notes")
+        for r in rows:
+            when = (r["started_at"] or "")[:16].replace("T", " ")
+            ms = r["duration_ms"] or 0
+            length = f"{ms // 60000}:{(ms // 1000) % 60:02d}"
+            print(f"{r['id']:<14}{when:<18}{r['source_type']:<9}{length:>8}"
+                  f"{r['shown']:>7}{'yes' if r['has_report'] else '-':>8}  "
+                  f"{r['notes'] or ''}")
+        print(f"\n{len(rows)} session(s). 'mis report <id>' for an evidence pack.")
+        return 0
+    finally:
+        store.close()
+
+
 def _live(args) -> int:
     import threading
 
@@ -67,7 +104,6 @@ def _live(args) -> int:
 
     from .live.session import LiveSession, run_from_capture, run_from_transcript
     from .server import create_app
-    from .store import SessionStore
 
     if args.adapter == "typesafe":
         from .jev.typesafe import TypeSafeJevAdapter
@@ -145,6 +181,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="Listen to each device briefly and report whether audio is "
                          "actually arriving")
 
+    ss = sub.add_parser("sessions", help="List recorded sessions")
+    ss.add_argument("--db", type=Path, default=Path("sessions.db"))
+    ss.add_argument("--note", nargs=2, metavar=("SESSION", "TEXT"),
+                    help="Attach a note to a session")
+
     rp2 = sub.add_parser("report", help="Evidence pack from a recorded session")
     rp2.add_argument("session", nargs="?", default=None,
                      help="Session id or prefix. Omit for the most recent.")
@@ -152,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
     rp2.add_argument("--out", type=Path, default=None, help="Write markdown to a file")
     rp2.add_argument("--no-coverage", action="store_true",
                      help="Skip the topic-coverage pass (no Jev calls)")
+    rp2.add_argument("--refresh", action="store_true",
+                     help="Regenerate even if a saved report exists")
 
     lv = sub.add_parser("live", help="Listen and show live signals in a browser")
     lv.add_argument("--mic", default=None,
@@ -201,15 +244,36 @@ def main(argv: list[str] | None = None) -> int:
             print("the volume icon), not to your headset directly.")
         return 0
 
+    if args.command == "sessions":
+        return _sessions(args)
+
     if args.command == "report":
-        from .report import build, render
+        from .report import build, render, resolve_session_id
+        from .store import SessionStore
 
-        adapter = None
-        if not args.no_coverage:
-            from .jev.typesafe import TypeSafeJevAdapter
+        if not args.db.exists():
+            print(f"{args.db} does not exist. Sessions record automatically when you "
+                  f"run 'mis live'.", file=sys.stderr)
+            return 2
 
-            adapter = TypeSafeJevAdapter()
-        text = render(build(str(args.db), args.session, adapter))
+        sid = resolve_session_id(str(args.db), args.session)
+        store = SessionStore(args.db)
+        try:
+            text = None if args.refresh else store.load_report(sid)
+            if text is None:
+                adapter = None
+                if not args.no_coverage:
+                    from .jev.typesafe import TypeSafeJevAdapter
+
+                    adapter = TypeSafeJevAdapter()
+                text = render(build(str(args.db), sid, adapter))
+                store.save_report(sid, text)
+                print(f"generated and saved report for {sid}", file=sys.stderr)
+            else:
+                print(f"saved report for {sid} (--refresh to regenerate)", file=sys.stderr)
+        finally:
+            store.close()
+
         if args.out:
             args.out.write_text(text)
             print(f"wrote {args.out}", file=sys.stderr)
