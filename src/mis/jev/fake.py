@@ -117,6 +117,13 @@ class FakeJevAdapter:
             level = 2.0 + min(3.0, structure * 0.6) - (0.5 if words > 400 else 0.0)
             return round(min(5.0, max(1.0, level)), 2), None, 0.8, None
 
+        if spec.name == "answer_depth":
+            specifics = _score_cues(candidate_text, (
+                "postgres", "redis", "kafka", "dynamo", "index", "shard", "queue",
+                "because", "milliseconds", "per second", "instead of",
+            ))
+            return (p := max(0.05, 0.9 - 0.18 * specifics)), p, None, None
+
         if spec.name == "rambling_risk":
             drift = _score_cues(candidate_text, _DRIFT_CUES)
             length_pressure = min(0.3, len(candidate_text.split()) / 2000)

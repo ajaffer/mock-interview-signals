@@ -190,11 +190,51 @@ TRADEOFF_COVERAGE = SignalSpec(
 )
 
 
+
+#: v0.3. The only signal in the set that came from a user describing a real
+#: problem rather than from reasoning about what might help. After running a
+#: mock, the interviewer's complaint was that the candidate "was reluctant to go
+#: deep and kept answering in just voice and was avoiding drawing to go in
+#: deeper". `answered_question` scored all 23 of those exchanges as answered --
+#: correctly, by its own wording, which only asks whether a question was
+#: addressed.
+#:
+#: The artifact half of that complaint (not drawing) is invisible to audio and
+#: needs whiteboard state. The verbal half is not.
+ANSWER_DEPTH = SignalSpec(
+    name="answer_depth",
+    primitive=Primitive.NOUL,
+    instructions=(
+        "The interviewer asked `latest_interviewer_question`. Is the candidate's "
+        "response so far STAYING SHALLOW -- describing in general terms what they "
+        "would do, without saying what specifically, how, or why? Answer yes if the "
+        "response is mostly intent and naming ('we'd need some kind of queue', 'we "
+        "would scale that horizontally', 'we'd use some smart merge') with no "
+        "mechanism, no named component, no numbers, and no reasoning. Answer no if "
+        "they give specifics: a named technology with a reason, a concrete data "
+        "shape, an actual number, or a described mechanism. Judge depth only. A "
+        "short answer that is specific is NOT shallow. A long answer that names "
+        "nothing concrete IS shallow."
+    ),
+    criteria={
+        "true": (
+            "Generalities and intent only -- what they would do, with no mechanism, "
+            "named component, number, or reason given."
+        ),
+        "false": (
+            "Specifics present: a named choice with a reason, a concrete mechanism, "
+            "a data shape, or a number."
+        ),
+    },
+    precondition=_answered_precondition,
+)
+
 SIGNAL_SET: tuple[SignalSpec, ...] = (
     CURRENT_PHASE,
     ANSWERED_QUESTION,
     CLARITY,
     RAMBLING_RISK,
+    ANSWER_DEPTH,
 )
 
 BY_NAME: dict[str, SignalSpec] = {s.name: s for s in SIGNAL_SET}

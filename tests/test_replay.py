@@ -58,7 +58,7 @@ def test_replay_runs_end_to_end(transcript):
     result = replay(transcript, FakeJevAdapter(), tick_ms=15_000)
     assert result.ticks
     assert result.session.source_sha256
-    assert all(d.signal_version == "v0.2" for d in result.all_decisions)
+    assert all(d.signal_version == "v0.3" for d in result.all_decisions)
 
 
 def test_noul_decisions_never_carry_confidence(transcript):

@@ -39,6 +39,10 @@ RAMBLING_RATE_LIMIT_MS = 90_000
 
 TRADEOFF_MAX_PROBABILITY = 0.30
 
+#: answer_depth fires on the HIGH tail -- high probability means shallow, which
+#: is the actionable case. Starting value is judgment; it has never been run.
+ANSWER_DEPTH_MIN_PROBABILITY = 0.60
+
 #: Re-display cooldowns. A signal that stays true is still only worth saying
 #: once -- the strip keeps showing the last visible value, so re-emitting an
 #: unchanged reading every tick is a drumbeat, not information.
@@ -46,6 +50,7 @@ RATE_LIMIT_MS: dict[str, int] = {
     "rambling_risk": RAMBLING_RATE_LIMIT_MS,
     # One nag per outstanding question is enough.
     "answered_question": 60_000,
+    "answer_depth": 90_000,
     # A session-level reading that moves slowly.
     "tradeoff_coverage": 300_000,
 }
@@ -54,6 +59,7 @@ MAX_VISIBLE = 3
 
 #: Ranked by how time-sensitive the interviewer's action is.
 DISPLAY_RANK: tuple[str, ...] = (
+    "answer_depth",
     "answered_question",
     "rambling_risk",
     "current_phase",
@@ -103,6 +109,12 @@ class SignalPolicy:
         match d.signal_name:
             case "current_phase":
                 return self._phase_rule(d)
+            case "answer_depth":
+                if d.probability is None:
+                    return "missing_probability"
+                if d.probability < ANSWER_DEPTH_MIN_PROBABILITY:
+                    return "not_shallow"
+                return self._cooldown(d, now_ms)
             case "answered_question":
                 return self._noul_low_tail(
                     d, ANSWERED_MAX_PROBABILITY

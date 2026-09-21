@@ -1,0 +1,144 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Interview signals</title>
+<style>
+  :root {
+    --bg:#0d1117; --panel:#161b22; --line:#30363d;
+    --dim:#8b949e; --text:#e6edf3; --hot:#f78166; --warm:#d29922; --cool:#3fb950;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:14px/1.5 ui-sans-serif,-apple-system,Segoe UI,sans-serif; }
+  header { display:flex; align-items:baseline; gap:18px; padding:14px 18px;
+           border-bottom:1px solid var(--line); }
+  #clock { font-size:30px; font-variant-numeric:tabular-nums; font-weight:600; }
+  #phase { font-size:17px; color:var(--cool); }
+  #phase small { color:var(--dim); font-size:13px; }
+  #conn { margin-left:auto; font-size:12px; color:var(--dim); }
+  #conn.live::before { content:"●"; color:var(--cool); margin-right:6px; }
+  #conn.down::before { content:"●"; color:var(--hot); margin-right:6px; }
+  main { padding:18px; display:grid; gap:18px; grid-template-columns:1fr 340px; }
+  @media (max-width:820px){ main { grid-template-columns:1fr; } }
+  h2 { font-size:11px; text-transform:uppercase; letter-spacing:.09em;
+       color:var(--dim); margin:0 0 10px; font-weight:600; }
+  .card { background:var(--panel); border:1px solid var(--line); border-left-width:3px;
+          border-radius:8px; padding:13px 15px; margin-bottom:10px;
+          animation:in .25s ease-out; }
+  @keyframes in { from { opacity:0; transform:translateY(-4px);} to {opacity:1;} }
+  .card.hot  { border-left-color:var(--hot); }
+  .card.warm { border-left-color:var(--warm); }
+  .card.cool { border-left-color:var(--cool); }
+  .card .what { font-size:17px; font-weight:600; }
+  .card .why  { color:var(--dim); font-size:12.5px; margin-top:4px;
+                font-variant-numeric:tabular-nums; }
+  #quiet { color:var(--dim); font-style:italic; padding:8px 2px; }
+  #feed { max-height:62vh; overflow:auto; font-size:12.5px; }
+  .u { margin-bottom:7px; }
+  .u b { color:var(--dim); font-weight:600; margin-right:6px;
+         font-variant-numeric:tabular-nums; }
+  .u.interviewer b { color:#79c0ff; }
+  .u.candidate  b { color:#d2a8ff; }
+  footer { border-top:1px solid var(--line); padding:9px 18px; font-size:11.5px;
+           color:var(--dim); display:flex; gap:20px; }
+</style>
+
+<header>
+  <div id="clock">00:00</div>
+  <div id="phase">— <small id="phaseAge"></small></div>
+  <div id="conn" class="down">connecting</div>
+</header>
+
+<main>
+  <section>
+    <h2>Signals</h2>
+    <div id="cards"></div>
+    <div id="quiet">Quiet. Nothing worth interrupting for.</div>
+  </section>
+  <section>
+    <h2>Heard</h2>
+    <div id="feed"></div>
+  </section>
+</main>
+
+<footer>
+  <span id="lat">latency —</span>
+  <span id="asked">asked —</span>
+  <span id="err"></span>
+</footer>
+
+<script>
+const COPY = {
+  answer_depth:      ["Shallow answer",       "generalities, no mechanism named"],
+  answered_question: ["Question not answered","they went somewhere else"],
+  rambling_risk:     ["Drifting",             "off the thread they started"],
+  clarity:           ["Clarity dropping",     "hard to follow"],
+  current_phase:     ["Phase",                ""],
+};
+const TONE = { answer_depth:"hot", answered_question:"hot", rambling_risk:"warm",
+               clarity:"warm", current_phase:"cool" };
+
+let t0 = Date.now(), phaseSince = null, live = [];
+const $ = id => document.getElementById(id);
+const mmss = ms => String(Math.floor(ms/60000)).padStart(2,"0")+":"+
+                   String(Math.floor(ms/1000)%60).padStart(2,"0");
+
+setInterval(() => {
+  $("clock").textContent = mmss(Date.now()-t0);
+  if (phaseSince) $("phaseAge").textContent = "for " + mmss(Date.now()-phaseSince);
+}, 1000);
+
+function render() {
+  const box = $("cards");
+  box.innerHTML = "";
+  const now = Date.now();
+  live = live.filter(s => now - s.at < 75000);       // cards age out on their own
+  for (const s of live) {
+    const [what, why] = COPY[s.name] || [s.name, ""];
+    const el = document.createElement("div");
+    el.className = "card " + (TONE[s.name] || "cool");
+    el.innerHTML = `<div class="what">${what}</div><div class="why">${why} · ${s.detail}</div>`;
+    box.appendChild(el);
+  }
+  $("quiet").style.display = live.length ? "none" : "block";
+}
+setInterval(render, 2000);
+
+const es = new EventSource("/events");
+es.onopen  = () => { $("conn").className = "live"; $("conn").textContent = "live"; };
+es.onerror = () => { $("conn").className = "down"; $("conn").textContent = "reconnecting"; };
+
+es.onmessage = ev => {
+  const m = JSON.parse(ev.data);
+
+  if (m.type === "transcript") {
+    const d = document.createElement("div");
+    d.className = "u " + m.speaker;
+    d.innerHTML = `<b>${m.speaker === "interviewer" ? "you" : "them"} ${mmss(m.t_ms)}</b>` +
+                  m.text.replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+    $("feed").prepend(d);
+    while ($("feed").children.length > 120) $("feed").lastChild.remove();
+  }
+
+  if (m.type === "tick") {
+    if (m.latency_ms != null) $("lat").textContent = "latency " + m.latency_ms + " ms";
+    $("asked").textContent = "asked " + m.asked;
+    if (m.phase && m.phase !== "unknown") {
+      const shown = m.phase.replace(/_/g, " ");
+      if ($("phase").firstChild.textContent.trim() !== shown) phaseSince = Date.now();
+      $("phase").firstChild.textContent = shown + " ";
+    }
+    for (const s of (m.signals || [])) {
+      if (!s.visible || s.name === "current_phase") continue;
+      const detail = s.probability != null ? "p=" + s.probability.toFixed(2)
+                   : s.confidence  != null ? String(s.value) + " (conf " + s.confidence.toFixed(2) + ")"
+                   : String(s.value);
+      live = live.filter(x => x.name !== s.name);
+      live.push({ name: s.name, detail, at: Date.now() });
+    }
+    render();
+  }
+
+  if (m.type === "error")  $("err").textContent = m.where + ": " + m.detail;
+  if (m.type === "status") $("err").textContent = m.detail;
+};
+</script>
