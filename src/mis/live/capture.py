@@ -59,6 +59,44 @@ def list_devices() -> list[tuple[int, str]]:
     return out
 
 
+class DeviceError(RuntimeError):
+    """Raised when a requested audio device cannot be resolved."""
+
+
+def resolve_device(spec: str) -> int:
+    """Resolve a device given either an index or part of its name.
+
+    Names are preferred. avfoundation renumbers every device when one is added
+    or removed -- installing BlackHole shifted an existing headset from 3 to 4 --
+    so an index written down yesterday can silently point at the wrong device
+    today, and the failure is quiet: you capture something, just not the thing
+    you meant.
+    """
+    devices = list_devices()
+    spec = spec.strip()
+
+    if spec.isdigit():
+        idx = int(spec)
+        known = dict(devices)
+        if idx not in known:
+            listing = "\n".join(f"  [{i}] {n}" for i, n in devices)
+            raise DeviceError(f"no audio device at index {idx}. Available:\n{listing}")
+        return idx
+
+    matches = [(i, n) for i, n in devices if spec.lower() in n.lower()]
+    if not matches:
+        listing = "\n".join(f"  [{i}] {n}" for i, n in devices)
+        raise DeviceError(f"no audio device matching {spec!r}. Available:\n{listing}")
+    if len(matches) > 1:
+        listing = "\n".join(f"  [{i}] {n}" for i, n in matches)
+        raise DeviceError(f"{spec!r} matches several devices, be more specific:\n{listing}")
+    return matches[0][0]
+
+
+def device_name(index: int) -> str:
+    return dict(list_devices()).get(index, "?")
+
+
 class _Stream(threading.Thread):
     """One ffmpeg process, read into fixed-length windows."""
 
@@ -134,3 +172,24 @@ class DualCapture:
     @property
     def errors(self) -> list[str]:
         return [f"{s.speaker.value}: {s.error}" for s in self.streams if s.error]
+
+
+def measure_level(device: int, seconds: float = 3.0) -> tuple[float, float]:
+    """Capture briefly and report (peak, rms).
+
+    The failure this catches is silent: a device opens fine and returns nothing
+    but zeros because the audio was never routed to it. Without measuring, that
+    looks identical to a working setup right up until nobody is transcribed.
+    """
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-f", "avfoundation", "-i", f":{device}",
+        "-ac", "1", "-ar", str(SAMPLE_RATE), "-t", str(seconds), "-f", "s16le", "-",
+    ]
+    proc = subprocess.run(cmd, capture_output=True)
+    if not proc.stdout:
+        return 0.0, 0.0
+    audio = np.frombuffer(proc.stdout, dtype=np.int16).astype(np.float32) / 32768.0
+    if audio.size == 0:
+        return 0.0, 0.0
+    return float(np.abs(audio).max()), float(np.sqrt((audio ** 2).mean()))

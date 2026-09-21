@@ -84,23 +84,31 @@ def _live(args) -> int:
             target=run_from_transcript, args=(session, args.simulate, args.speed),
             daemon=True, name="simulate")
     else:
-        from .live.capture import DualCapture, list_devices
+        from .live.capture import DeviceError, DualCapture, device_name, resolve_device
         from .live.transcribe import Transcriber
 
         if args.mic is None:
             print("--mic is required. Run: mis devices", file=sys.stderr)
             return 2
-        if args.system is None:
+        try:
+            mic = resolve_device(args.mic)
+            system = resolve_device(args.system) if args.system is not None else None
+        except DeviceError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        if system is None:
             print("WARNING: no --system device. You will hear yourself but NOT the\n"
-                  "         candidate, and three of five signals need their speech.\n"
-                  "         Install BlackHole and pass its index.", file=sys.stderr)
-        names = dict(list_devices())
-        print(f"mic:    [{args.mic}] {names.get(args.mic, '?')}", file=sys.stderr)
-        if args.system is not None:
-            print(f"system: [{args.system}] {names.get(args.system, '?')}", file=sys.stderr)
+                  "         candidate, and three of the signals need their speech.",
+                  file=sys.stderr)
+        print(f"mic:    [{mic}] {device_name(mic)}", file=sys.stderr)
+        if system is not None:
+            print(f"system: [{system}] {device_name(system)}", file=sys.stderr)
+            if mic == system:
+                print("ERROR: mic and system are the same device.", file=sys.stderr)
+                return 2
         print(f"loading whisper '{args.model}' (first run downloads it)...", file=sys.stderr)
         transcriber = Transcriber(args.model)
-        capture = DualCapture(args.mic, args.system)
+        capture = DualCapture(mic, system)
         worker = threading.Thread(
             target=run_from_capture, args=(session, capture, transcriber),
             daemon=True, name="capture")
@@ -128,13 +136,17 @@ def main(argv: list[str] | None = None) -> int:
         help="fake = offline keyword stand-in, NOT evidence of signal quality",
     )
 
-    sub.add_parser("devices", help="List audio input devices")
+    dv = sub.add_parser("devices", help="List audio input devices")
+    dv.add_argument("--check", action="store_true",
+                    help="Listen to each device briefly and report whether audio is "
+                         "actually arriving")
 
     lv = sub.add_parser("live", help="Listen and show live signals in a browser")
-    lv.add_argument("--mic", type=int, default=None,
-                    help="avfoundation index for YOUR microphone (interviewer)")
-    lv.add_argument("--system", type=int, default=None,
-                    help="avfoundation index for system audio (candidate), e.g. BlackHole")
+    lv.add_argument("--mic", default=None,
+                    help="YOUR microphone (interviewer): device name or index. "
+                         "Names are safer -- indexes shift when devices change.")
+    lv.add_argument("--system", default=None,
+                    help="System audio (candidate): device name or index, e.g. BlackHole")
     lv.add_argument("--simulate", type=Path, default=None,
                     help="Rehearse against a stored transcript instead of a microphone")
     lv.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier")
@@ -146,13 +158,32 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "devices":
-        from .live.capture import list_devices
+        from .live.capture import list_devices, measure_level
 
-        print("avfoundation audio inputs:")
-        for idx, name in list_devices():
-            print(f"  [{idx}]  {name}")
-        print("\nYour microphone is the interviewer. System audio (BlackHole) is the")
-        print("candidate. No BlackHole in the list means only your own voice is heard.")
+        devices = list_devices()
+        if not args.check:
+            print("avfoundation audio inputs:")
+            for idx, name in devices:
+                print(f"  [{idx}]  {name}")
+            print("\nYour microphone is the interviewer. System audio (BlackHole) is the")
+            print("candidate. Pass devices by NAME -- indexes shift when devices change.")
+            print("Run 'mis devices --check' to see which ones are actually receiving audio.")
+            return 0
+
+        print("Listening to each device for 3s. Play audio through your call or a")
+        print("video first, and speak, so both sides have something to hear.\n")
+        silent = []
+        for idx, name in devices:
+            peak, rms = measure_level(idx)
+            verdict = "AUDIO" if peak > 0.01 else "silent"
+            if peak <= 0.01:
+                silent.append(name)
+            print(f"  [{idx}]  {name:<34} peak={peak:0.4f} rms={rms:0.4f}  {verdict}")
+        if any("blackhole" in n.lower() for n in silent):
+            print("\nBlackHole is silent. Your call audio is not routed to it, so the")
+            print("candidate will never be transcribed. Set your OUTPUT device to the")
+            print("Multi-Output Device that includes BlackHole (menu bar: option-click")
+            print("the volume icon), not to your headset directly.")
         return 0
 
     if args.command == "live":
