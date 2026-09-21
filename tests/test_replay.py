@@ -140,3 +140,36 @@ def test_tracked_fixture_parses_and_replays():
         str(d.value) for d in result.all_decisions if d.signal_name == "current_phase"
     }
     assert len(phases) > 1, "a 14-minute design interview should move between phases"
+
+
+def test_store_accepts_writes_from_another_thread(tmp_path):
+    """Live mode opens the store on the main thread and writes from the capture
+    thread. SQLite refuses that by default, and the failure is silent: it raises
+    inside a daemon thread while the UI keeps streaming and nothing is recorded."""
+    import queue as _queue
+    import threading
+
+    from mis.models import Session, Speaker, TranscriptChunk
+    from mis.store import SessionStore
+
+    store = SessionStore(tmp_path / "s.db")
+    store.save_session(Session(id="t1"))
+
+    outcome: _queue.Queue = _queue.Queue()
+
+    def writer() -> None:
+        try:
+            store.save_chunks("t1", [TranscriptChunk(
+                index=0, offset_ms=0, speaker=Speaker.CANDIDATE, text="hello")])
+            outcome.put(None)
+        except Exception as exc:  # noqa: BLE001 - the whole point is to catch it
+            outcome.put(exc)
+
+    thread = threading.Thread(target=writer)
+    thread.start()
+    thread.join()
+
+    err = outcome.get()
+    assert err is None, f"cross-thread write failed: {err}"
+    assert len(store.decisions("t1")) == 0
+    store.close()

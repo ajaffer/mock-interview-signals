@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -63,10 +64,16 @@ CREATE INDEX IF NOT EXISTS idx_decisions_session
 class SessionStore:
     def __init__(self, path: str | Path = "sessions.db") -> None:
         self.path = str(path)
-        self._conn = sqlite3.connect(self.path)
+        # Live mode opens the store on the main thread and writes from the
+        # capture thread. SQLite refuses that by default, and the failure is
+        # invisible: the write raises inside a daemon thread, the UI keeps
+        # streaming, and the session quietly records nothing.
+        self._conn = sqlite3.connect(self.path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
-        self._conn.executescript(SCHEMA)
-        self._conn.commit()
+        self._lock = threading.Lock()
+        with self._lock:
+            self._conn.executescript(SCHEMA)
+            self._conn.commit()
 
     def close(self) -> None:
         self._conn.close()
@@ -78,6 +85,7 @@ class SessionStore:
         self.close()
 
     def save_session(self, session: Session) -> None:
+      with self._lock:
         self._conn.execute(
             """INSERT OR REPLACE INTO sessions
                (id, interview_type, source_type, source_ref, source_sha256,
@@ -98,6 +106,7 @@ class SessionStore:
         self._conn.commit()
 
     def save_chunks(self, session_id: str, chunks: Iterable[TranscriptChunk]) -> None:
+      with self._lock:
         self._conn.executemany(
             """INSERT OR REPLACE INTO transcript_chunks
                (session_id, idx, offset_ms, speaker, text) VALUES (?,?,?,?,?)""",
@@ -106,6 +115,7 @@ class SessionStore:
         self._conn.commit()
 
     def save_decisions(self, session_id: str, decisions: Iterable[SignalDecision]) -> None:
+      with self._lock:
         self._conn.executemany(
             """INSERT INTO signal_decisions
                (session_id, signal_name, signal_version, primitive, value, probability,

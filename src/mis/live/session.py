@@ -10,14 +10,16 @@ import json
 import queue
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..jev.adapter import JevAdapter
-from ..models import Phase, Speaker, TranscriptChunk
+from ..models import Phase, Session, SourceType, Speaker, TranscriptChunk
 from ..policy import SignalPolicy
 from ..signals import SIGNAL_SET
 from ..state import RollingState
+from ..store import SessionStore
 
 TICK_MS = 20_000  # live cadence: often enough to be current, rare enough to stay quiet
 
@@ -26,6 +28,10 @@ TICK_MS = 20_000  # live cadence: often enough to be current, rare enough to sta
 class LiveSession:
     adapter: JevAdapter
     tick_ms: int = TICK_MS
+    #: Persist as the session runs, not at the end. An interview that crashes or
+    #: is closed abruptly is exactly the one worth having a record of.
+    store: SessionStore | None = None
+    session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     events: queue.Queue = field(default_factory=queue.Queue)
     state: RollingState = field(default_factory=RollingState)
     policy: SignalPolicy = field(default_factory=SignalPolicy)
@@ -35,6 +41,12 @@ class LiveSession:
 
     def __post_init__(self) -> None:
         self._next_tick = self.tick_ms
+        if self.store is not None:
+            self.store.save_session(Session(
+                id=self.session_id,
+                source_type=SourceType.LIVE,
+                source_ref="live capture",
+            ))
 
     # -- inputs -----------------------------------------------------------
 
@@ -45,6 +57,8 @@ class LiveSession:
         chunk = TranscriptChunk(index=self._index, offset_ms=t_ms, speaker=speaker, text=text)
         self._index += 1
         self.state.add(chunk)
+        if self.store is not None:
+            self.store.save_chunks(self.session_id, [chunk])
         self.emit({"type": "transcript", "speaker": speaker.value,
                    "text": text, "t_ms": t_ms})
 
@@ -86,6 +100,8 @@ class LiveSession:
         latency_ms = (time.monotonic() - started) * 1000
 
         decisions = self.policy.apply(decisions, self.state.now_ms)
+        if self.store is not None:
+            self.store.save_decisions(self.session_id, decisions)
         for d in decisions:
             if d.signal_name == "current_phase" and d.suppressed_reason != "low_confidence":
                 self.state.observe_phase(Phase(str(d.value)))

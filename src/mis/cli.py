@@ -67,6 +67,7 @@ def _live(args) -> int:
 
     from .live.session import LiveSession, run_from_capture, run_from_transcript
     from .server import create_app
+    from .store import SessionStore
 
     if args.adapter == "typesafe":
         from .jev.typesafe import TypeSafeJevAdapter
@@ -77,7 +78,10 @@ def _live(args) -> int:
         print("FAKE adapter: the strip will move, but the judgments are keyword "
               "heuristics, not Jev.", file=sys.stderr)
 
-    session = LiveSession(adapter=adapter, tick_ms=args.tick_ms)
+    store = None if args.no_db else SessionStore(args.db)
+    session = LiveSession(adapter=adapter, tick_ms=args.tick_ms, store=store)
+    if store is not None:
+        print(f"recording to {args.db} as session {session.session_id}", file=sys.stderr)
 
     if args.simulate is not None:
         worker = threading.Thread(
@@ -141,6 +145,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="Listen to each device briefly and report whether audio is "
                          "actually arriving")
 
+    rp2 = sub.add_parser("report", help="Evidence pack from a recorded session")
+    rp2.add_argument("session", nargs="?", default=None,
+                     help="Session id or prefix. Omit for the most recent.")
+    rp2.add_argument("--db", type=Path, default=Path("sessions.db"))
+    rp2.add_argument("--out", type=Path, default=None, help="Write markdown to a file")
+    rp2.add_argument("--no-coverage", action="store_true",
+                     help="Skip the topic-coverage pass (no Jev calls)")
+
     lv = sub.add_parser("live", help="Listen and show live signals in a browser")
     lv.add_argument("--mic", default=None,
                     help="YOUR microphone (interviewer): device name or index. "
@@ -153,6 +165,9 @@ def main(argv: list[str] | None = None) -> int:
     lv.add_argument("--model", default="base.en", help="faster-whisper model size")
     lv.add_argument("--tick-ms", type=int, default=20_000)
     lv.add_argument("--port", type=int, default=8765)
+    lv.add_argument("--db", type=Path, default=Path("sessions.db"),
+                    help="Session log. Recording is on by default; pass --no-db to skip")
+    lv.add_argument("--no-db", action="store_true", help="Do not record this session")
     lv.add_argument("--adapter", choices=["fake", "typesafe"], default="typesafe")
 
     args = parser.parse_args(argv)
@@ -184,6 +199,22 @@ def main(argv: list[str] | None = None) -> int:
             print("candidate will never be transcribed. Set your OUTPUT device to the")
             print("Multi-Output Device that includes BlackHole (menu bar: option-click")
             print("the volume icon), not to your headset directly.")
+        return 0
+
+    if args.command == "report":
+        from .report import build, render
+
+        adapter = None
+        if not args.no_coverage:
+            from .jev.typesafe import TypeSafeJevAdapter
+
+            adapter = TypeSafeJevAdapter()
+        text = render(build(str(args.db), args.session, adapter))
+        if args.out:
+            args.out.write_text(text)
+            print(f"wrote {args.out}", file=sys.stderr)
+        else:
+            print(text)
         return 0
 
     if args.command == "live":
