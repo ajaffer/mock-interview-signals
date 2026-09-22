@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Signals</title>
+<meta name="description" content="A live signal layer for human-led mock interviews, built on TypeSafe's Jev. Replay of a recorded session.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa; --panel: #ffffff; --line: #e4e4e1; --ink: #1b1b19;
+    --muted: #6b6b66; --faint: #9a9a94;
+    --accent: #2f6f4f; --warn: #9a6114; --stop: #a33a2c;
+    --chip: #f0f0ed;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16171a; --panel: #1d1f23; --line: #2e3137; --ink: #e8e8e4;
+      --muted: #9a9b96; --faint: #6a6c68;
+      --accent: #7bc29a; --warn: #d6a659; --stop: #e0806f;
+      --chip: #24262b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16171a; --panel: #1d1f23; --line: #2e3137; --ink: #e8e8e4;
+    --muted: #9a9b96; --faint: #6a6c68;
+    --accent: #7bc29a; --warn: #d6a659; --stop: #e0806f;
+    --chip: #24262b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 var(--sans);
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 56px; }
+
+  header { margin-bottom: 20px; }
+  h1 { font-size: 21px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+  .lede code { font-family: var(--mono); font-size: .88em; background: var(--chip);
+               padding: 1px 5px; border-radius: 4px; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 18px 0 14px; padding: 10px 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  }
+  button {
+    font: 500 13px var(--sans); color: var(--ink); background: var(--chip);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--faint); }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .clock { font: 500 13px var(--mono); color: var(--muted); margin-left: auto; }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .panel > h2 {
+    font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint); margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  }
+
+  #transcript { height: 430px; overflow-y: auto; padding: 12px 14px; }
+  .line { margin-bottom: 11px; font-size: 14px; }
+  .line b { display: block; font: 600 10.5px var(--mono); letter-spacing: .05em;
+            text-transform: uppercase; color: var(--faint); margin-bottom: 1px; }
+  .line.cand b { color: var(--accent); }
+
+  .phase {
+    padding: 13px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  .phase .name { font: 600 16px var(--sans); }
+  .phase .dur { font: 13px var(--mono); color: var(--muted); margin-left: auto; }
+
+  #cards { padding: 12px 14px; min-height: 152px; }
+  .card {
+    border-left: 3px solid var(--warn); background: var(--chip);
+    border-radius: 0 7px 7px 0; padding: 9px 12px; margin-bottom: 9px;
+    animation: in .22s ease-out;
+  }
+  .card.alarm { border-left-color: var(--stop); }
+  @keyframes in { from { opacity: 0; transform: translateY(-3px); } }
+  .card .top { display: flex; align-items: baseline; gap: 8px; }
+  .card .what { font-weight: 600; font-size: 14px; }
+  .card .num { font: 12px var(--mono); color: var(--muted); margin-left: auto; }
+  .card .why { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .empty { color: var(--faint); font-size: 13.5px; padding: 6px 0; }
+
+  #dropped { height: 168px; overflow-y: auto; padding: 8px 14px 12px;
+             border-top: 1px solid var(--line); }
+  .drop { display: flex; gap: 8px; align-items: baseline; font: 12px var(--mono);
+          color: var(--faint); padding: 2.5px 0; }
+  .drop .t { min-width: 42px; }
+  .drop .n { color: var(--muted); min-width: 124px; }
+
+  .tally { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
+           background: var(--line); border: 1px solid var(--line);
+           border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  @media (max-width: 800px) { .tally { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .tally { grid-template-columns: repeat(2, 1fr); } }
+  .tally .cost .v { color: var(--accent); }
+  .tally div { background: var(--panel); padding: 13px 14px; }
+  .tally .k { font: 600 10.5px var(--sans); letter-spacing: .07em;
+              text-transform: uppercase; color: var(--faint); }
+  .tally .v { font: 600 22px var(--mono); margin-top: 3px; letter-spacing: -.02em; }
+  .tally .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+  .note { margin-top: 20px; color: var(--muted); font-size: 13.5px; max-width: 74ch; }
+  .note strong { color: var(--ink); font-weight: 600; }
+  footer { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line);
+           color: var(--faint); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Interview Signals</h1>
+  <p class="lede">
+    An interviewer-side signal layer for mock interviews. Transcript goes in;
+    a handful of <strong>typed, bounded decisions</strong> come out &mdash; phase,
+    whether the last question was answered, clarity, rambling. Built on TypeSafe&rsquo;s
+    <code>Jev</code>, which returns labels and probabilities rather than prose,
+    so software can act on them without parsing text.
+  </p>
+</header>
+
+<div class="controls">
+  <button id="play">Pause</button>
+  <button id="restart">Restart</button>
+  <button class="sp" data-x="1">1&times;</button>
+  <button class="sp" data-x="4" aria-pressed="true">4&times;</button>
+  <button class="sp" data-x="12">12&times;</button>
+  <span class="clock" id="clock">0:00</span>
+</div>
+<div class="bar"><i id="prog"></i></div>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Transcript</h2>
+    <div id="transcript"></div>
+  </section>
+
+  <section class="panel">
+    <h2>What the interviewer sees</h2>
+    <div class="phase">
+      <span class="name" id="phase">&mdash;</span>
+      <span class="dur" id="phasedur"></span>
+    </div>
+    <div id="cards"><p class="empty">Nothing yet.</p></div>
+    <div id="dropped"></div>
+  </section>
+</div>
+
+<div class="tally">
+  <div><div class="k">Judgments made</div><div class="v" id="t-made">0</div></div>
+  <div><div class="k">Shown</div><div class="v" id="t-shown">0</div></div>
+  <div><div class="k">Suppressed</div><div class="v" id="t-sup">0<small>%</small></div></div>
+  <div><div class="k">Median latency</div><div class="v" id="t-lat">0<small>ms</small></div></div>
+  <div class="cost"><div class="k">Spent so far</div><div class="v" id="t-cost">0.00<small>&cent;</small></div></div>
+</div>
+
+<p class="note">
+  <strong>The suppressed column is the point.</strong> Jev answers every question it is
+  asked. Deciding which answers are worth an interviewer&rsquo;s attention mid-conversation
+  is a separate layer, and it discards most of them &mdash; for being below threshold,
+  unchanged since last tick, too low-confidence, or simply too soon after the last card.
+  A technically correct signal can still be bad product behaviour.
+</p>
+<p class="note">
+  Questions that fail a code-side precondition are never sent at all: no outstanding
+  question to judge, too little candidate speech, turn too short to ramble. Duration and
+  counting logic stays in code, because Jev 1.13 does not count reliably.
+</p>
+
+<footer id="foot"></footer>
+
+</div>
+
+<script>
+const SESSION = {"signal_set_version":"v0.3","duration_ms":604000,"transcript":[{"offset_ms":0,"speaker":"interviewer","text":"Alright, I think we're both on. Can you hear me okay?"},{"offset_ms":3500,"speaker":"candidate","text":"Yeah, coming through fine."},{"offset_ms":6000,"speaker":"interviewer","text":"Great. So today I'd like you to design a URL shortener. Something like bit.ly. Take a minute if you want to think, and just talk me through your approach."},{"offset_ms":16000,"speaker":"candidate","text":"Sure. Before I start designing, can I ask a few questions about scope?"},{"offset_ms":20000,"speaker":"interviewer","text":"Please do."},{"offset_ms":22000,"speaker":"candidate","text":"First, what kind of scale are we talking about? Is this an internal tool or something public facing?"},{"offset_ms":28000,"speaker":"interviewer","text":"Let's say public. Assume a hundred million new URLs a month."},{"offset_ms":34000,"speaker":"candidate","text":"Okay. And what's the read to write ratio? For a shortener I'd guess reads dominate heavily."},{"offset_ms":41000,"speaker":"interviewer","text":"That's right, assume about a hundred to one."},{"offset_ms":46000,"speaker":"candidate","text":"Got it. Do users need custom aliases, like choosing their own short code?"},{"offset_ms":52000,"speaker":"interviewer","text":"Let's support that, yes."},{"offset_ms":55000,"speaker":"candidate","text":"And do links expire?"},{"offset_ms":58000,"speaker":"interviewer","text":"Optional expiry. Let's say the user can set a TTL if they want one."},{"offset_ms":64000,"speaker":"candidate","text":"Okay, one more. Do we need analytics, like click counts per link?"},{"offset_ms":70000,"speaker":"interviewer","text":"Let's call that a nice to have. Focus on the core path first."},{"offset_ms":76000,"speaker":"candidate","text":"Perfect. So to summarize the requirements: shorten a long URL to a short code, redirect on lookup, optional custom alias, optional TTL, read heavy at roughly a hundred to one, a hundred million writes a month. Non-functionally I'd say redirect latency is the thing that matters most, and availability on the read path matters more than on the write path. If shortening is down for a minute that's annoying. If redirects are down, every link anyone ever made is broken."},{"offset_ms":108000,"speaker":"interviewer","text":"That's a good distinction. Go ahead and start on the design."},{"offset_ms":113000,"speaker":"candidate","text":"Let me do a quick estimate first. A hundred million writes a month is roughly forty writes a second. At a hundred to one that's four thousand reads a second. That's not enormous. Storage, if each record is around five hundred bytes, a hundred million a month is fifty gigabytes a month, so around six hundred gigs a year. Also not enormous, but it grows forever unless we expire things."},{"offset_ms":152000,"speaker":"interviewer","text":"Sounds reasonable. What does the architecture look like?"},{"offset_ms":157000,"speaker":"candidate","text":"I'll start simple. A write service that takes a long URL and returns a short code. A read service that takes a short code and issues a 301 or 302 redirect. Both sit behind a load balancer. A datastore holding the mapping. And a cache in front of the read path, since reads dominate and the access pattern is very skewed, a small number of links get most of the traffic."},{"offset_ms":190000,"speaker":"interviewer","text":"Why 301 versus 302?"},{"offset_ms":195000,"speaker":"candidate","text":"So the redirect is the core of the read path, and what I'd want is for it to be as fast as possible, which is why I'd put a cache in front. The cache would be Redis, probably, and I'd size it based on the working set. If we assume the top one percent of links drive most traffic, that's a manageable amount of memory. I'd also think about putting a CDN in front of that, since redirects are a great fit for edge caching, and that would cut latency for users far from the origin region quite a lot."},{"offset_ms":236000,"speaker":"interviewer","text":"Okay. Let's talk about how you generate the short code."},{"offset_ms":242000,"speaker":"candidate","text":"A few options. One, hash the long URL, take the first seven characters, base62 encode. Simple and stateless, but you get collisions and you have to handle them. Two, a counter, base62 encoded. No collisions, but a global counter is a bottleneck and the codes are sequential and guessable. Three, pre-generate a pool of random codes and hand them out from a key generation service."},{"offset_ms":280000,"speaker":"interviewer","text":"Which would you pick?"},{"offset_ms":284000,"speaker":"candidate","text":"I'd go with the third, the key generation service, but let me say why rather than just picking it. The hash approach is the simplest to build but collision handling makes the write path do a read first, check if it exists, retry, and that gets worse as the table fills. The counter avoids collisions entirely and is very cheap, but sequential codes let anyone enumerate every link in the system, which is a real problem if people shorten anything private. You can fix that by range-allocating the counter across servers so it isn't globally sequential, which also fixes the bottleneck, so honestly the counter with ranged allocation is close. The pre-generated pool wins for me because the write path becomes a single fast pop from a pool, and the codes are unguessable by construction. The cost is an extra service and you have to make sure a code is never handed out twice, so the pool needs to be transactional."},{"offset_ms":348000,"speaker":"interviewer","text":"Good. What about storage, what would you use?"},{"offset_ms":354000,"speaker":"candidate","text":"The access pattern is a key value lookup on short code. No joins, no complex queries. So I'd use a key value store rather than a relational database. Something like DynamoDB or Cassandra. Short code is the partition key, and the value is the long URL plus metadata, creation time, TTL, owner."},{"offset_ms":386000,"speaker":"interviewer","text":"You mentioned the access pattern is skewed. What happens if one link goes viral and you get a hot partition?"},{"offset_ms":396000,"speaker":"candidate","text":"Right, so for scaling the storage layer I'd shard by short code. Since the code is effectively random in the pre-generated approach, the distribution across shards is pretty even. I'd add read replicas so the read path can fan out across them, and the write path goes to the primary. And then as the dataset grows you can add shards. The nice thing about sharding on a random key is that you don't get the hotspotting you'd get with something like a timestamp prefix, which is a classic problem in time series schemas where everything lands on the newest shard."},{"offset_ms":442000,"speaker":"interviewer","text":"Mm. Let's come back to that. What happens when a link expires?"},{"offset_ms":449000,"speaker":"candidate","text":"Two parts. Lazy deletion on read, so if a lookup finds an expired record it returns a 404 and doesn't serve the redirect. And a background cleanup job that sweeps expired records so storage doesn't grow forever. The lazy check is what guarantees correctness, the sweep is just housekeeping. I'd also need to invalidate the cache entry, otherwise a cached redirect keeps serving after expiry."},{"offset_ms":486000,"speaker":"interviewer","text":"Good. Earlier I asked what happens with a hot partition when a link goes viral, and I don't think we covered it."},{"offset_ms":496000,"speaker":"candidate","text":"Ah, you're right, I answered a different question. So a single viral link means one short code, one partition, taking enormous read traffic. Sharding doesn't help because it's a single key. The cache absorbs most of it, since that one key will be resident and hot. Below that, if the cache node itself becomes the bottleneck, I'd replicate that key across cache nodes and pick one at random on read. And the CDN is really the right answer, because a viral link is exactly the case the edge handles best. The storage layer barely sees the traffic at all after that."},{"offset_ms":548000,"speaker":"interviewer","text":"That's better. We've got about five minutes. Anything you'd flag as a risk in this design?"},{"offset_ms":556000,"speaker":"candidate","text":"The biggest one is the key generation service becoming a single point of failure on the write path. If it's down, nobody can create links. I'd mitigate with a local buffer of codes on each write server, so a brief outage is invisible. Second risk is cache invalidation on custom alias updates, if we let people repoint an alias. Third, I glossed over abuse. A public shortener is a phishing vector, and you'd want some scanning of target URLs and rate limiting per account. That's not really a scaling concern but it would matter in production."},{"offset_ms":604000,"speaker":"interviewer","text":"Good. Let's stop there. That was solid."}],"decisions":[{"signal_name":"answered_question","primitive":"noul","value":"0.93","probability":0.93,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":30000,"latency_ms":226.0279579932103,"in_tokens":874,"out_tokens":38},{"signal_name":"answer_depth","primitive":"noul","value":"0.5","probability":0.5,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":30000,"latency_ms":226.0279579932103,"in_tokens":874,"out_tokens":38},{"signal_name":"answered_question","primitive":"noul","value":"0.9","probability":0.9,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":46000,"latency_ms":89.57354100130033,"in_tokens":977,"out_tokens":38},{"signal_name":"answer_depth","primitive":"noul","value":"0.4","probability":0.4,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":46000,"latency_ms":89.57354100130033,"in_tokens":977,"out_tokens":38},{"signal_name":"current_phase","primitive":"choice","value":"requirements","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":60000,"latency_ms":122.53991699253675,"in_tokens":1323,"out_tokens":108},{"signal_name":"answered_question","primitive":"noul","value":"0.92","probability":0.92,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":60000,"latency_ms":122.53991699253675,"in_tokens":1323,"out_tokens":108},{"signal_name":"answer_depth","primitive":"noul","value":"0.46","probability":0.46,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":60000,"latency_ms":122.53991699253675,"in_tokens":1323,"out_tokens":108},{"signal_name":"current_phase","primitive":"choice","value":"requirements","probability":null,"confidence":1.0,"visible":1,"suppressed_reason":null,"window_end_ms":75000,"latency_ms":101.22500000579748,"in_tokens":1391,"out_tokens":108},{"signal_name":"answered_question","primitive":"noul","value":"0.92","probability":0.92,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":75000,"latency_ms":101.22500000579748,"in_tokens":1391,"out_tokens":108},{"signal_name":"answer_depth","primitive":"noul","value":"0.44","probability":0.44,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":75000,"latency_ms":101.22500000579748,"in_tokens":1391,"out_tokens":108},{"signal_name":"current_phase","primitive":"choice","value":"requirements","probability":null,"confidence":0.73,"visible":0,"suppressed_reason":"unchanged","window_end_ms":90000,"latency_ms":119.21683400578331,"in_tokens":1509,"out_tokens":108},{"signal_name":"answered_question","primitive":"noul","value":"0.92","probability":0.92,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":90000,"latency_ms":119.21683400578331,"in_tokens":1509,"out_tokens":108},{"signal_name":"answer_depth","primitive":"noul","value":"0.39","probability":0.39,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":90000,"latency_ms":119.21683400578331,"in_tokens":1509,"out_tokens":108},{"signal_name":"current_phase","primitive":"choice","value":"requirements","probability":null,"confidence":0.74,"visible":0,"suppressed_reason":"unchanged","window_end_ms":105000,"latency_ms":130.88758300000336,"in_tokens":1509,"out_tokens":108},{"signal_name":"answered_question","primitive":"noul","value":"0.91","probability":0.91,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":105000,"latency_ms":130.88758300000336,"in_tokens":1509,"out_tokens":108},{"signal_name":"answer_depth","primitive":"noul","value":"0.36","probability":0.36,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":105000,"latency_ms":130.88758300000336,"in_tokens":1509,"out_tokens":108},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.96,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":120000,"latency_ms":108.95154200261459,"in_tokens":1643,"out_tokens":109},{"signal_name":"answered_question","primitive":"noul","value":"0.92","probability":0.92,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":120000,"latency_ms":108.95154200261459,"in_tokens":1643,"out_tokens":109},{"signal_name":"answer_depth","primitive":"noul","value":"0.1","probability":0.1,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":120000,"latency_ms":108.95154200261459,"in_tokens":1643,"out_tokens":109},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.98,"visible":1,"suppressed_reason":null,"window_end_ms":135000,"latency_ms":122.0222499978263,"in_tokens":1298,"out_tokens":74},{"signal_name":"current_phase","primitive":"choice","value":"high_level_design","probability":null,"confidence":0.98,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":152000,"latency_ms":101.37845900317188,"in_tokens":1521,"out_tokens":90},{"signal_name":"clarity","primitive":"score","value":"4.5","probability":null,"confidence":0.58,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":152000,"latency_ms":101.37845900317188,"in_tokens":1521,"out_tokens":90},{"signal_name":"current_phase","primitive":"choice","value":"high_level_design","probability":null,"confidence":1.0,"visible":1,"suppressed_reason":null,"window_end_ms":165000,"latency_ms":132.10820899985265,"in_tokens":1626,"out_tokens":90},{"signal_name":"clarity","primitive":"score","value":"4.5","probability":null,"confidence":0.58,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":165000,"latency_ms":132.10820899985265,"in_tokens":1626,"out_tokens":90},{"signal_name":"current_phase","primitive":"choice","value":"high_level_design","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":180000,"latency_ms":135.3932909987634,"in_tokens":1955,"out_tokens":124},{"signal_name":"answered_question","primitive":"noul","value":"0.84","probability":0.84,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":180000,"latency_ms":135.3932909987634,"in_tokens":1955,"out_tokens":124},{"signal_name":"clarity","primitive":"score","value":"4.52","probability":null,"confidence":0.6,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":180000,"latency_ms":135.3932909987634,"in_tokens":1955,"out_tokens":124},{"signal_name":"answer_depth","primitive":"noul","value":"0.2","probability":0.2,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":180000,"latency_ms":135.3932909987634,"in_tokens":1955,"out_tokens":124},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":0.67,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":195000,"latency_ms":139.12991600227542,"in_tokens":1676,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"3.94","probability":null,"confidence":0.57,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":195000,"latency_ms":139.12991600227542,"in_tokens":1676,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":0.68,"visible":1,"suppressed_reason":null,"window_end_ms":210000,"latency_ms":106.44333400705364,"in_tokens":1879,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.08","probability":0.08,"confidence":null,"visible":1,"suppressed_reason":null,"window_end_ms":210000,"latency_ms":106.44333400705364,"in_tokens":1879,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"3.91","probability":null,"confidence":0.53,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":210000,"latency_ms":106.44333400705364,"in_tokens":1879,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.17","probability":0.17,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":210000,"latency_ms":106.44333400705364,"in_tokens":1879,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":0.54,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":225000,"latency_ms":126.9705840095412,"in_tokens":1809,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.09","probability":0.09,"confidence":null,"visible":0,"suppressed_reason":"rate_limited","window_end_ms":225000,"latency_ms":126.9705840095412,"in_tokens":1809,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"3.9","probability":null,"confidence":0.54,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":225000,"latency_ms":126.9705840095412,"in_tokens":1809,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.2","probability":0.2,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":225000,"latency_ms":126.9705840095412,"in_tokens":1809,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":0.59,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":240000,"latency_ms":127.18549999408424,"in_tokens":1724,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.08","probability":0.08,"confidence":null,"visible":0,"suppressed_reason":"rate_limited","window_end_ms":240000,"latency_ms":127.18549999408424,"in_tokens":1724,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"3.93","probability":null,"confidence":0.68,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":240000,"latency_ms":127.18549999408424,"in_tokens":1724,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.17","probability":0.17,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":240000,"latency_ms":127.18549999408424,"in_tokens":1724,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":0.91,"visible":0,"suppressed_reason":"unchanged","window_end_ms":255000,"latency_ms":106.22229099681135,"in_tokens":1764,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.1","probability":0.1,"confidence":null,"visible":0,"suppressed_reason":"rate_limited","window_end_ms":255000,"latency_ms":106.22229099681135,"in_tokens":1764,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"3.83","probability":null,"confidence":0.63,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":255000,"latency_ms":106.22229099681135,"in_tokens":1764,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.13","probability":0.13,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":255000,"latency_ms":106.22229099681135,"in_tokens":1764,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":280000,"latency_ms":114.13824999181088,"in_tokens":1335,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.0600000000000005","probability":null,"confidence":0.74,"visible":1,"suppressed_reason":null,"window_end_ms":280000,"latency_ms":114.13824999181088,"in_tokens":1335,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":285000,"latency_ms":87.96095900470391,"in_tokens":1542,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.58","probability":null,"confidence":0.65,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":285000,"latency_ms":87.96095900470391,"in_tokens":1542,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":300000,"latency_ms":123.78779200662393,"in_tokens":1737,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.96","probability":0.96,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":300000,"latency_ms":123.78779200662393,"in_tokens":1737,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.51","probability":null,"confidence":0.6,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":300000,"latency_ms":123.78779200662393,"in_tokens":1737,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.05","probability":0.05,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":300000,"latency_ms":123.78779200662393,"in_tokens":1737,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":315000,"latency_ms":93.15812500426546,"in_tokens":1737,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.96","probability":0.96,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":315000,"latency_ms":93.15812500426546,"in_tokens":1737,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.5600000000000005","probability":null,"confidence":0.63,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":315000,"latency_ms":93.15812500426546,"in_tokens":1737,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.04","probability":0.04,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":315000,"latency_ms":93.15812500426546,"in_tokens":1737,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":330000,"latency_ms":124.47358400095254,"in_tokens":1891,"out_tokens":143},{"signal_name":"answered_question","primitive":"noul","value":"0.96","probability":0.96,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":330000,"latency_ms":124.47358400095254,"in_tokens":1891,"out_tokens":143},{"signal_name":"clarity","primitive":"score","value":"4.58","probability":null,"confidence":0.65,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":330000,"latency_ms":124.47358400095254,"in_tokens":1891,"out_tokens":143},{"signal_name":"rambling_risk","primitive":"noul","value":"0.04","probability":0.04,"confidence":null,"visible":0,"suppressed_reason":"below_threshold","window_end_ms":330000,"latency_ms":124.47358400095254,"in_tokens":1891,"out_tokens":143},{"signal_name":"answer_depth","primitive":"noul","value":"0.05","probability":0.05,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":330000,"latency_ms":124.47358400095254,"in_tokens":1891,"out_tokens":143},{"signal_name":"current_phase","primitive":"choice","value":"tradeoffs","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":345000,"latency_ms":103.24554200633429,"in_tokens":1757,"out_tokens":143},{"signal_name":"answered_question","primitive":"noul","value":"0.96","probability":0.96,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":345000,"latency_ms":103.24554200633429,"in_tokens":1757,"out_tokens":143},{"signal_name":"clarity","primitive":"score","value":"4.59","probability":null,"confidence":0.66,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":345000,"latency_ms":103.24554200633429,"in_tokens":1757,"out_tokens":143},{"signal_name":"rambling_risk","primitive":"noul","value":"0.04","probability":0.04,"confidence":null,"visible":0,"suppressed_reason":"below_threshold","window_end_ms":345000,"latency_ms":103.24554200633429,"in_tokens":1757,"out_tokens":143},{"signal_name":"answer_depth","primitive":"noul","value":"0.04","probability":0.04,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":345000,"latency_ms":103.24554200633429,"in_tokens":1757,"out_tokens":143},{"signal_name":"current_phase","primitive":"choice","value":"data_model","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":360000,"latency_ms":129.46500000543892,"in_tokens":1392,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.470000000000001","probability":null,"confidence":0.57,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":360000,"latency_ms":129.46500000543892,"in_tokens":1392,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":386000,"latency_ms":85.51695900678169,"in_tokens":1283,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.51","probability":null,"confidence":0.59,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":386000,"latency_ms":85.51695900678169,"in_tokens":1283,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.99,"visible":1,"suppressed_reason":null,"window_end_ms":390000,"latency_ms":156.69108300062362,"in_tokens":1283,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.5","probability":null,"confidence":0.58,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":390000,"latency_ms":156.69108300062362,"in_tokens":1283,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":405000,"latency_ms":177.43175000941847,"in_tokens":1418,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.49","probability":null,"confidence":0.59,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":405000,"latency_ms":177.43175000941847,"in_tokens":1418,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":420000,"latency_ms":99.3914999999106,"in_tokens":1715,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.74","probability":0.74,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":420000,"latency_ms":99.3914999999106,"in_tokens":1715,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.51","probability":null,"confidence":0.59,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":420000,"latency_ms":99.3914999999106,"in_tokens":1715,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.09","probability":0.09,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":420000,"latency_ms":99.3914999999106,"in_tokens":1715,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":435000,"latency_ms":123.98324999958277,"in_tokens":1607,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.61","probability":0.61,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":435000,"latency_ms":123.98324999958277,"in_tokens":1607,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.4","probability":null,"confidence":0.65,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":435000,"latency_ms":123.98324999958277,"in_tokens":1607,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.09","probability":0.09,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":435000,"latency_ms":123.98324999958277,"in_tokens":1607,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.38,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":450000,"latency_ms":136.60133400117047,"in_tokens":1406,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.55","probability":null,"confidence":0.63,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":450000,"latency_ms":136.60133400117047,"in_tokens":1406,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.46,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":465000,"latency_ms":134.2036249989178,"in_tokens":1321,"out_tokens":109},{"signal_name":"answered_question","primitive":"noul","value":"0.97","probability":0.97,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":465000,"latency_ms":134.2036249989178,"in_tokens":1321,"out_tokens":109},{"signal_name":"answer_depth","primitive":"noul","value":"0.07","probability":0.07,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":465000,"latency_ms":134.2036249989178,"in_tokens":1321,"out_tokens":109},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":0.91,"visible":0,"suppressed_reason":"unchanged","window_end_ms":486000,"latency_ms":89.8888329975307,"in_tokens":1366,"out_tokens":109},{"signal_name":"answered_question","primitive":"noul","value":"0.9","probability":0.9,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":486000,"latency_ms":89.8888329975307,"in_tokens":1366,"out_tokens":109},{"signal_name":"answer_depth","primitive":"noul","value":"0.07","probability":0.07,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":486000,"latency_ms":89.8888329975307,"in_tokens":1366,"out_tokens":109},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":496000,"latency_ms":124.11233299644664,"in_tokens":1507,"out_tokens":109},{"signal_name":"answered_question","primitive":"noul","value":"0.93","probability":0.93,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":496000,"latency_ms":124.11233299644664,"in_tokens":1507,"out_tokens":109},{"signal_name":"answer_depth","primitive":"noul","value":"0.06","probability":0.06,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":496000,"latency_ms":124.11233299644664,"in_tokens":1507,"out_tokens":109},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":510000,"latency_ms":110.067124987836,"in_tokens":1690,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.93","probability":0.93,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":510000,"latency_ms":110.067124987836,"in_tokens":1690,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.21","probability":null,"confidence":0.65,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":510000,"latency_ms":110.067124987836,"in_tokens":1690,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.06","probability":0.06,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":510000,"latency_ms":110.067124987836,"in_tokens":1690,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"scaling","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":525000,"latency_ms":102.24779100099113,"in_tokens":1690,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.93","probability":0.93,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":525000,"latency_ms":102.24779100099113,"in_tokens":1690,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.279999999999999","probability":null,"confidence":0.63,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":525000,"latency_ms":102.24779100099113,"in_tokens":1690,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.06","probability":0.06,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":525000,"latency_ms":102.24779100099113,"in_tokens":1690,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"wrap_up","probability":null,"confidence":0.98,"visible":0,"suppressed_reason":"phase_dwell","window_end_ms":548000,"latency_ms":96.1129999923287,"in_tokens":1296,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.279999999999999","probability":null,"confidence":0.67,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":548000,"latency_ms":96.1129999923287,"in_tokens":1296,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"wrap_up","probability":null,"confidence":1.0,"visible":1,"suppressed_reason":null,"window_end_ms":556000,"latency_ms":86.92045799398329,"in_tokens":1433,"out_tokens":89},{"signal_name":"clarity","primitive":"score","value":"4.38","probability":null,"confidence":0.63,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":556000,"latency_ms":86.92045799398329,"in_tokens":1433,"out_tokens":89},{"signal_name":"current_phase","primitive":"choice","value":"wrap_up","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":570000,"latency_ms":133.92566599941347,"in_tokens":1720,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.97","probability":0.97,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":570000,"latency_ms":133.92566599941347,"in_tokens":1720,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.43","probability":null,"confidence":0.62,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":570000,"latency_ms":133.92566599941347,"in_tokens":1720,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.07","probability":0.07,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":570000,"latency_ms":133.92566599941347,"in_tokens":1720,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"wrap_up","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":585000,"latency_ms":107.00891699525528,"in_tokens":1585,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.97","probability":0.97,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":585000,"latency_ms":107.00891699525528,"in_tokens":1585,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.5","probability":null,"confidence":0.58,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":585000,"latency_ms":107.00891699525528,"in_tokens":1585,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.07","probability":0.07,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":585000,"latency_ms":107.00891699525528,"in_tokens":1585,"out_tokens":123},{"signal_name":"current_phase","primitive":"choice","value":"wrap_up","probability":null,"confidence":1.0,"visible":0,"suppressed_reason":"unchanged","window_end_ms":604000,"latency_ms":85.57133300928399,"in_tokens":1615,"out_tokens":123},{"signal_name":"answered_question","primitive":"noul","value":"0.97","probability":0.97,"confidence":null,"visible":0,"suppressed_reason":"not_confident_negative","window_end_ms":604000,"latency_ms":85.57133300928399,"in_tokens":1615,"out_tokens":123},{"signal_name":"clarity","primitive":"score","value":"4.55","probability":null,"confidence":0.62,"visible":0,"suppressed_reason":"low_confidence","window_end_ms":604000,"latency_ms":85.57133300928399,"in_tokens":1615,"out_tokens":123},{"signal_name":"answer_depth","primitive":"noul","value":"0.07","probability":0.07,"confidence":null,"visible":0,"suppressed_reason":"not_shallow","window_end_ms":604000,"latency_ms":85.57133300928399,"in_tokens":1615,"out_tokens":123}]};
+
+const LABEL = {
+  answered_question: ["Question not answered", "They went somewhere else"],
+  answer_depth:      ["Shallow answer", "Generalities, no mechanism named"],
+  rambling_risk:     ["Drifting", "Off the thread they started"],
+  clarity:           ["Clarity dropping", "Getting hard to follow"],
+};
+const REASON = {
+  below_threshold: "below threshold", low_confidence: "confidence too low",
+  rate_limited: "too soon after the last card", unchanged: "unchanged since last tick",
+  not_confident_negative: "negative, not confident", not_shallow: "not shallow",
+  phase_dwell: "phase held, not re-shown",
+};
+const CARD_MS = 75000;
+// Jev bills input tokens only, at $0.042 per million; output is free.
+const CENTS_PER_IN_TOKEN = 0.042 / 1e6 * 100;
+
+const $ = id => document.getElementById(id);
+const fmt = ms => `${Math.floor(ms/60000)}:${String(Math.floor(ms/1000)%60).padStart(2,"0")}`;
+const num = d => d.probability != null ? d.probability.toFixed(2)
+               : isNaN(+d.value) ? String(d.value).replace(/_/g, " ")
+               : (+d.value).toFixed(1).replace(/\.0$/, "");
+
+let t = 0, speed = 4, playing = true, last = null;
+let iChunk = 0, iDec = 0, live = [], phaseSince = 0;
+
+function reset() {
+  t = 0; iChunk = 0; iDec = 0; live = []; phaseSince = 0;
+  $("transcript").innerHTML = ""; $("dropped").innerHTML = "";
+  $("cards").innerHTML = '<p class="empty">Nothing yet.</p>';
+  $("phase").textContent = "—"; $("phasedur").textContent = "";
+  $("t-made").textContent = "0"; $("t-shown").textContent = "0";
+  $("t-sup").innerHTML = '0<small>%</small>';
+  $("t-cost").innerHTML = '0.00<small>&cent;</small>';
+}
+
+function addChunk(c) {
+  const el = document.createElement("div");
+  el.className = "line" + (c.speaker === "candidate" ? " cand" : "");
+  el.innerHTML = `<b></b><span></span>`;
+  el.querySelector("b").textContent = c.speaker;
+  el.querySelector("span").textContent = c.text;
+  const box = $("transcript");
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addDrop(d) {
+  const el = document.createElement("div");
+  el.className = "drop";
+  el.innerHTML = `<span class="t"></span><span class="n"></span><span class="r"></span>`;
+  el.querySelector(".t").textContent = fmt(d.window_end_ms);
+  el.querySelector(".n").textContent = `${d.signal_name} ${num(d)}`;
+  el.querySelector(".r").textContent = REASON[d.suppressed_reason] || d.suppressed_reason;
+  const box = $("dropped");
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function applyDecision(d) {
+  if (d.signal_name === "current_phase") {
+    if (d.visible) {
+      $("phase").textContent = String(d.value).replace(/_/g, " ");
+      phaseSince = d.window_end_ms;
+    } else addDrop(d);
+    return;
+  }
+  if (d.visible) live.push({ d, until: d.window_end_ms + CARD_MS });
+  else addDrop(d);
+}
+
+function drawCards() {
+  const box = $("cards");
+  if (!live.length) { box.innerHTML = '<p class="empty">Nothing right now.</p>'; return; }
+  box.innerHTML = "";
+  for (const { d } of live) {
+    const [what, why] = LABEL[d.signal_name] || [d.signal_name, ""];
+    const el = document.createElement("div");
+    el.className = "card" + (d.probability != null && d.probability < 0.3 ? " alarm" : "");
+    el.innerHTML = `<div class="top"><span class="what"></span><span class="num"></span></div>
+                    <div class="why"></div>`;
+    el.querySelector(".what").textContent = what;
+    el.querySelector(".num").textContent =
+      d.primitive === "noul" ? `p=${d.probability.toFixed(2)}` : num(d);
+    el.querySelector(".why").textContent = why;
+    box.appendChild(el);
+  }
+}
+
+function tally() {
+  const made = iDec;
+  const seen = SESSION.decisions.slice(0, made);
+  const shown = seen.filter(d => d.visible).length;
+  // Every signal in one tick rides a single batched request and carries that
+  // request's token count, so bill each window once rather than per answer.
+  const calls = new Map();
+  for (const d of seen) calls.set(d.window_end_ms, d.in_tokens);
+  let cents = 0;
+  for (const tokens of calls.values()) cents += (tokens || 0) * CENTS_PER_IN_TOKEN;
+  $("t-made").textContent = made;
+  $("t-shown").textContent = shown;
+  $("t-sup").innerHTML = (made ? Math.round((1 - shown / made) * 100) : 0) + "<small>%</small>";
+  $("t-cost").innerHTML = cents.toFixed(2) + "<small>&cent;</small>";
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (last === null) last = now;
+  const dt = now - last;
+  last = now;
+  if (!playing) return;
+
+  t = Math.min(t + dt * speed, SESSION.duration_ms + 2000);
+
+  while (iChunk < SESSION.transcript.length && SESSION.transcript[iChunk].offset_ms <= t)
+    addChunk(SESSION.transcript[iChunk++]);
+
+  let dirty = false;
+  while (iDec < SESSION.decisions.length && SESSION.decisions[iDec].window_end_ms <= t) {
+    applyDecision(SESSION.decisions[iDec++]); dirty = true;
+  }
+  const before = live.length;
+  live = live.filter(c => c.until > t);
+  if (dirty || live.length !== before) { drawCards(); tally(); }
+
+  $("clock").textContent = fmt(Math.min(t, SESSION.duration_ms));
+  $("prog").style.width = Math.min(100, t / SESSION.duration_ms * 100) + "%";
+  if (phaseSince) $("phasedur").textContent = "for " + fmt(Math.max(0, t - phaseSince));
+
+  if (t >= SESSION.duration_ms + 2000) { playing = false; $("play").textContent = "Replay"; }
+}
+
+$("play").addEventListener("click", () => {
+  if (t >= SESSION.duration_ms + 2000) reset();
+  playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+});
+$("restart").addEventListener("click", () => { reset(); playing = true; $("play").textContent = "Pause"; });
+document.querySelectorAll(".sp").forEach(b => b.addEventListener("click", () => {
+  speed = +b.dataset.x;
+  document.querySelectorAll(".sp").forEach(o => o.setAttribute("aria-pressed", o === b));
+}));
+
+(function init() {
+  const lats = SESSION.decisions.map(d => d.latency_ms).filter(Boolean).sort((a, b) => a - b);
+  $("t-lat").innerHTML = Math.round(lats[Math.floor(lats.length / 2)] || 0) + "<small>ms</small>";
+  $("foot").textContent =
+    `Replay of a recorded session · signal set ${SESSION.signal_set_version} · ` +
+    `${SESSION.decisions.length} real Jev decisions over a synthetic transcript. ` +
+    `Costed at Jev's $0.042 per million input tokens, output free. ` +
+    `No API calls are made by this page.`;
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -38,6 +38,7 @@ def create_app(session: LiveSession, worker: threading.Thread | None = None) -> 
     async def events() -> StreamingResponse:
         async def stream():
             # Replay what already happened so a late-opened tab is not blank.
+            yield f"data: {json.dumps({'type': 'mode', 'mode': session.mode})}\n\n"
             for past in list(history):
                 yield f"data: {json.dumps(past)}\n\n"
             while True:
@@ -56,9 +57,19 @@ def create_app(session: LiveSession, worker: threading.Thread | None = None) -> 
                                  headers={"Cache-Control": "no-cache",
                                           "X-Accel-Buffering": "no"})
 
+    @app.post("/start")
+    async def start() -> dict:
+        session.start()
+        return {"mode": session.mode}
+
+    @app.post("/pause")
+    async def pause() -> dict:
+        session.pause()
+        return {"mode": session.mode}
+
     @app.post("/stop")
     async def stop() -> dict:
         session.stop()
-        return {"stopped": True}
+        return {"mode": session.mode, "session_id": session.session_id}
 
     return app

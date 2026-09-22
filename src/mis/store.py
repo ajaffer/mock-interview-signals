@@ -57,6 +57,28 @@ CREATE TABLE IF NOT EXISTS signal_decisions (
     created_at         TEXT NOT NULL
 );
 
+-- Gate v2 evidence. Two tables because the two measurements answer different
+-- questions: card labels say whether a signal earned its interruption, session
+-- answers say whether the strip cost attention overall. A tool can pass the
+-- first and fail the second, which is exactly how the 2026-09-20 gate failed.
+CREATE TABLE IF NOT EXISTS card_labels (
+    session_id   TEXT NOT NULL REFERENCES sessions(id),
+    decision_id  INTEGER NOT NULL REFERENCES signal_decisions(id),
+    label        TEXT NOT NULL,   -- new | already_knew | wrong | bad_timing
+    created_at   TEXT NOT NULL,
+    PRIMARY KEY (session_id, decision_id)
+);
+
+CREATE TABLE IF NOT EXISTS session_labels (
+    session_id     TEXT PRIMARY KEY REFERENCES sessions(id),
+    told_new       INTEGER NOT NULL,   -- 1/0
+    misfired       INTEGER NOT NULL,   -- 1/0
+    attention_cost TEXT NOT NULL,      -- none | little | yes
+    excluded       INTEGER NOT NULL DEFAULT 0,
+    note           TEXT,
+    created_at     TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS reports (
     session_id    TEXT PRIMARY KEY REFERENCES sessions(id),
     generated_at  TEXT NOT NULL,
@@ -152,6 +174,46 @@ class SessionStore:
             ],
         )
         self._conn.commit()
+
+    def save_card_label(self, session_id: str, decision_id: int, label: str) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO card_labels "
+            "(session_id, decision_id, label, created_at) VALUES (?,?,?,?)",
+            (session_id, decision_id, label, datetime.now(UTC).isoformat()),
+        )
+        self._conn.commit()
+
+    def save_session_label(self, session_id: str, *, told_new: bool, misfired: bool,
+                           attention_cost: str, excluded: bool = False,
+                           note: str | None = None) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO session_labels (session_id, told_new, misfired, "
+            "attention_cost, excluded, note, created_at) VALUES (?,?,?,?,?,?,?)",
+            (session_id, int(told_new), int(misfired), attention_cost,
+             int(excluded), note, datetime.now(UTC).isoformat()),
+        )
+        self._conn.commit()
+
+    def card_labels(self, session_id: str) -> dict[int, str]:
+        rows = self._conn.execute(
+            "SELECT decision_id, label FROM card_labels WHERE session_id=?", (session_id,))
+        return {r["decision_id"]: r["label"] for r in rows}
+
+    def session_label(self, session_id: str) -> sqlite3.Row | None:
+        return self._conn.execute(
+            "SELECT * FROM session_labels WHERE session_id=?", (session_id,)).fetchone()
+
+    def gate_rows(self) -> list[sqlite3.Row]:
+        """Every labelled session, with its card tallies. The gate report."""
+        return list(self._conn.execute("""
+            SELECT s.id, s.started_at, s.notes, l.told_new, l.misfired,
+                   l.attention_cost, l.excluded,
+                   (SELECT COUNT(*) FROM card_labels c WHERE c.session_id=s.id) AS labelled,
+                   (SELECT COUNT(*) FROM card_labels c WHERE c.session_id=s.id
+                      AND c.label='new') AS new_cards
+            FROM sessions s JOIN session_labels l ON l.session_id = s.id
+            ORDER BY s.started_at
+        """))
 
     def save_report(self, session_id: str, markdown: str) -> None:
         """Store the rendered report.

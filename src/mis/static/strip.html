@@ -40,12 +40,32 @@
   .u.candidate  b { color:#d2a8ff; }
   footer { border-top:1px solid var(--line); padding:9px 18px; font-size:11.5px;
            color:var(--dim); display:flex; gap:20px; }
+  #xport { margin-left:auto; display:flex; gap:8px; }
+  #xport button { font:500 12px inherit; color:var(--fg); background:transparent;
+                  border:1px solid var(--line); border-radius:5px; padding:5px 12px;
+                  cursor:pointer; }
+  #xport button:hover:not(:disabled) { border-color:var(--dim); }
+  #xport button:disabled { opacity:.35; cursor:default; }
+  #xport button.go { border-color:var(--cool); color:var(--cool); }
+  /* Standby and paused have to be unmistakable at a glance: believing you are
+     recording when you are not is the one failure that loses a whole session. */
+  body.standby #clock, body.paused #clock { color:var(--warn); }
+  body.standby header, body.paused header { box-shadow:inset 0 2px 0 var(--warn); }
+  #modeTag { font-size:11.5px; letter-spacing:.06em; text-transform:uppercase;
+             color:var(--warn); }
+  body.running #modeTag, body.stopped #modeTag { display:none; }
 </style>
 
 <header>
   <div id="clock">00:00</div>
+  <div id="modeTag">standby</div>
   <div id="phase">— <small id="phaseAge"></small></div>
   <div id="conn" class="down">connecting</div>
+  <div id="xport">
+    <button id="bStart" class="go">Start</button>
+    <button id="bPause" disabled>Pause</button>
+    <button id="bStop" disabled>Stop</button>
+  </div>
 </header>
 
 <main>
@@ -77,15 +97,34 @@ const COPY = {
 const TONE = { answer_depth:"hot", answered_question:"hot", rambling_risk:"warm",
                clarity:"warm", current_phase:"cool" };
 
-let t0 = Date.now(), phaseSince = null, live = [];
+let t0 = Date.now(), phaseSince = null, live = [], mode = "standby", elapsed = 0;
 const $ = id => document.getElementById(id);
 const mmss = ms => String(Math.floor(ms/60000)).padStart(2,"0")+":"+
                    String(Math.floor(ms/1000)%60).padStart(2,"0");
 
 setInterval(() => {
-  $("clock").textContent = mmss(Date.now()-t0);
-  if (phaseSince) $("phaseAge").textContent = "for " + mmss(Date.now()-phaseSince);
+  if (mode === "running") elapsed += 1000;
+  $("clock").textContent = mmss(elapsed);
+  if (phaseSince && mode === "running")
+    $("phaseAge").textContent = "for " + mmss(Date.now()-phaseSince);
 }, 1000);
+
+function setMode(m) {
+  mode = m;
+  document.body.className = m;
+  $("modeTag").textContent = m;
+  $("bStart").textContent = m === "paused" ? "Resume" : "Start";
+  $("bStart").disabled = (m === "running" || m === "stopped");
+  $("bPause").disabled = (m !== "running");
+  $("bStop").disabled  = (m === "stopped" || m === "standby");
+  if (m === "stopped") $("quiet").textContent =
+    "Session ended. Run  mis label  to record what was useful.";
+}
+const post = p => fetch(p, {method:"POST"}).then(r => r.json())
+                   .then(d => setMode(d.mode)).catch(() => {});
+$("bStart").onclick = () => post("/start");
+$("bPause").onclick = () => post("/pause");
+$("bStop").onclick  = () => { if (confirm("End the session?")) post("/stop"); };
 
 function render() {
   const box = $("cards");
@@ -110,6 +149,8 @@ es.onerror = () => { $("conn").className = "down"; $("conn").textContent = "reco
 es.onmessage = ev => {
   const m = JSON.parse(ev.data);
 
+  if (m.type === "mode") setMode(m.mode);
+
   if (m.type === "transcript") {
     const d = document.createElement("div");
     d.className = "u " + m.speaker;
@@ -120,6 +161,7 @@ es.onmessage = ev => {
   }
 
   if (m.type === "tick") {
+    if (m.t_ms != null) elapsed = m.t_ms;
     if (m.latency_ms != null) $("lat").textContent = "latency " + m.latency_ms + " ms";
     $("asked").textContent = "asked " + m.asked;
     if (m.phase && m.phase !== "unknown") {

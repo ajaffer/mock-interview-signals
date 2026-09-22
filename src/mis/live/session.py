@@ -38,6 +38,18 @@ class LiveSession:
     _next_tick: int = 0
     _index: int = 0
     _stop: threading.Event = field(default_factory=threading.Event)
+    #: standby -> running -> paused -> stopped. The session starts in standby
+    #: because the runbook says to launch a minute or two before the candidate
+    #: joins; without an explicit Start, that small talk lands in the transcript
+    #: and skews every phase timing in the report.
+    mode: str = "standby"
+    _last_raw_ms: int = 0
+    _pause_began_raw: int = 0
+    #: Wall-clock milliseconds spent in standby or paused, subtracted from every
+    #: incoming timestamp. Paused time is not interview time: leaving it in
+    #: stretches phase durations and lets `clarity` and `rambling_risk` judge
+    #: dead air, which would then be labelled as a bad card during the gate.
+    _pause_offset_ms: int = 0
 
     def __post_init__(self) -> None:
         self._next_tick = self.tick_ms
@@ -52,8 +64,9 @@ class LiveSession:
 
     def add_utterance(self, speaker: Speaker, text: str, t_ms: int) -> None:
         text = text.strip()
-        if not text:
+        if not text or self.mode != "running":
             return
+        t_ms = max(0, t_ms - self._pause_offset_ms)
         chunk = TranscriptChunk(index=self._index, offset_ms=t_ms, speaker=speaker, text=text)
         self._index += 1
         self.state.add(chunk)
@@ -63,16 +76,55 @@ class LiveSession:
                    "text": text, "t_ms": t_ms})
 
     def advance(self, now_ms: int) -> None:
-        """Move the clock and evaluate if a tick is due."""
-        self.state.advance_to(now_ms)
-        if now_ms >= self._next_tick:
+        """Move the clock and evaluate if a tick is due.
+
+        `now_ms` is raw wall-clock since capture began. It is recorded even when
+        not running, because that is how the length of a pause is measured.
+        """
+        self._last_raw_ms = now_ms
+        if self.mode != "running":
+            return
+        elapsed = now_ms - self._pause_offset_ms
+        self.state.advance_to(elapsed)
+        if elapsed >= self._next_tick:
             self._evaluate()
-            self._next_tick = now_ms + self.tick_ms
+            self._next_tick = elapsed + self.tick_ms
 
     def emit(self, payload: dict) -> None:
         self.events.put(payload)
 
+    def start(self) -> None:
+        """Begin, or resume after a pause.
+
+        Idempotent while running, and refused once stopped: a stopped session
+        has been finalised and is about to be labelled, so reviving it would
+        splice two interviews into one record.
+        """
+        if self.mode in ("running", "stopped"):
+            return
+        self._pause_offset_ms += max(0, self._last_raw_ms - self._pause_began_raw)
+        if self.mode == "standby":
+            # First start: the clock begins now, not when capture did.
+            self._pause_offset_ms = self._last_raw_ms
+            self._next_tick = self.tick_ms
+        else:
+            # Do not fire a tick the instant we resume.
+            self._next_tick = (self._last_raw_ms - self._pause_offset_ms) + self.tick_ms
+        self.mode = "running"
+        self.emit({"type": "mode", "mode": self.mode})
+
+    def pause(self) -> None:
+        if self.mode != "running":
+            return
+        self.mode = "paused"
+        self._pause_began_raw = self._last_raw_ms
+        self.emit({"type": "mode", "mode": self.mode})
+
     def stop(self) -> None:
+        self.mode = "stopped"
+        self.emit({"type": "mode", "mode": self.mode,
+                   "session_id": self.session_id,
+                   "duration_ms": self.state.now_ms})
         self._stop.set()
 
     # -- the tick ---------------------------------------------------------

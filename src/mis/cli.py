@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from .jev.fake import FakeJevAdapter
+from .models import Speaker
 from .replay import ReplayResult, replay
 from .store import SessionStore
 
@@ -97,6 +98,54 @@ def _sessions(args) -> int:
         store.close()
 
 
+def _gate(args) -> int:
+    """Gate v2 standing, two-sided on purpose.
+
+    A benefit rate alone would pass a tool that helps occasionally and distracts
+    constantly, which is how the 2026-09-20 gate failed. The cost answer is the
+    other half and it is not averaged: one session that cost attention is a
+    finding, not an outlier to be smoothed away.
+    """
+    if not args.db.exists():
+        print(f"{args.db} does not exist.", file=sys.stderr)
+        return 2
+    store = SessionStore(args.db)
+    try:
+        rows = store.gate_rows()
+        counted = [r for r in rows if not r["excluded"]]
+        if not rows:
+            print("No labelled sessions yet. Run 'mis label' after your next one.")
+            return 0
+
+        print(f"{'session':<14}{'cards':>7}{'new':>6}{'cost':>9}  notes")
+        for r in rows:
+            mark = "  (excluded)" if r["excluded"] else ""
+            print(f"{r['id'][:12]:<14}{r['labelled']:>7}{r['new_cards']:>6}"
+                  f"{r['attention_cost']:>9}  {(r['notes'] or '')[:28]}{mark}")
+
+        cards = sum(r["labelled"] for r in counted)
+        new = sum(r["new_cards"] for r in counted)
+        costly = [r for r in counted if r["attention_cost"] == "yes"]
+        rate = (new / cards * 100) if cards else 0.0
+
+        print()
+        print(f"  sessions counted   {len(counted)}/{args.target}")
+        print(f"  cards labelled     {cards}")
+        print(f"  told me something  {new}  ({rate:.0f}%)")
+        print(f"  cost attention     {len(costly)} session(s)")
+        print()
+        if len(counted) < args.target:
+            print(f"  {args.target - len(counted)} more session(s) before the gate is callable.")
+        elif costly:
+            print("  FAIL on cost. Drop the cards, keep the phase banner.")
+        else:
+            print(f"  Benefit rate {rate:.0f}%, zero attention cost. "
+                  f"Call it against the threshold you fixed in advance.")
+        return 0
+    finally:
+        store.close()
+
+
 def _live(args) -> int:
     import threading
 
@@ -148,7 +197,12 @@ def _live(args) -> int:
                 return 2
         print(f"loading whisper '{args.model}' (first run downloads it)...", file=sys.stderr)
         transcriber = Transcriber(args.model)
-        capture = DualCapture(mic, system)
+        mic_speaker = (Speaker.CANDIDATE if args.my_role == "candidate"
+                       else Speaker.INTERVIEWER)
+        if mic_speaker is Speaker.CANDIDATE:
+            print("ROLE: you are the CANDIDATE this half; your mic records as "
+                  "'candidate'.", file=sys.stderr)
+        capture = DualCapture(mic, system, mic_speaker=mic_speaker)
         worker = threading.Thread(
             target=run_from_capture, args=(session, capture, transcriber),
             daemon=True, name="capture")
@@ -195,6 +249,25 @@ def main(argv: list[str] | None = None) -> int:
                      help="Skip the topic-coverage pass (no Jev calls)")
     rp2.add_argument("--refresh", action="store_true",
                      help="Regenerate even if a saved report exists")
+    rp2.add_argument("--board", type=Path, default=None,
+                     help="A whiteboard to analyse alongside the transcript: an "
+                          ".excalidraw export, or a screenshot (.png/.jpg) when the "
+                          "platform will not let you export. Implies --refresh.")
+
+    lb = sub.add_parser("label", help="Record what was useful, after a session")
+    lb.add_argument("session", nargs="?", default=None,
+                    help="Session id or prefix. Omit for the most recent.")
+    lb.add_argument("--db", type=Path, default=Path("sessions.db"))
+
+    gt = sub.add_parser("gate", help="Where the labelled sessions leave gate v2")
+    gt.add_argument("--db", type=Path, default=Path("sessions.db"))
+    gt.add_argument("--target", type=int, default=10, help="Sessions the gate needs")
+
+    bd = sub.add_parser("board", help="Show the extracted state of a whiteboard")
+    bd.add_argument("board", type=Path,
+                    help="An .excalidraw export or a screenshot")
+    bd.add_argument("--json", action="store_true",
+                    help="Emit the state exactly as Jev receives it")
 
     lv = sub.add_parser("live", help="Listen and show live signals in a browser")
     lv.add_argument("--mic", default=None,
@@ -212,6 +285,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="Session log. Recording is on by default; pass --no-db to skip")
     lv.add_argument("--no-db", action="store_true", help="Do not record this session")
     lv.add_argument("--adapter", choices=["fake", "typesafe"], default="typesafe")
+    lv.add_argument("--my-role", choices=["interviewer", "candidate"],
+                    default="interviewer",
+                    help="Which side of the interview YOU are on. Pass 'candidate' "
+                         "for the half of a peer swap where they interview you, or "
+                         "every role label in the recording is inverted.")
 
     args = parser.parse_args(argv)
 
@@ -244,12 +322,35 @@ def main(argv: list[str] | None = None) -> int:
             print("the volume icon), not to your headset directly.")
         return 0
 
+    if args.command == "label":
+        from .label import run as run_label
+
+        if not args.db.exists():
+            print(f"{args.db} does not exist.", file=sys.stderr)
+            return 2
+        return run_label(args.db, args.session)
+
+    if args.command == "gate":
+        return _gate(args)
+
+    if args.command == "board":
+        from .board import BoardError, load_board
+        from .board_vision import VisionError
+
+        try:
+            state = load_board(args.board)
+        except (BoardError, VisionError, OSError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        print(json.dumps(state.to_jev_state(), indent=2) if args.json
+              else state.render())
+        return 0
+
     if args.command == "sessions":
         return _sessions(args)
 
     if args.command == "report":
         from .report import build, render, resolve_session_id
-        from .store import SessionStore
 
         if not args.db.exists():
             print(f"{args.db} does not exist. Sessions record automatically when you "
@@ -259,14 +360,15 @@ def main(argv: list[str] | None = None) -> int:
         sid = resolve_session_id(str(args.db), args.session)
         store = SessionStore(args.db)
         try:
-            text = None if args.refresh else store.load_report(sid)
+            text = None if (args.refresh or args.board) else store.load_report(sid)
             if text is None:
                 adapter = None
                 if not args.no_coverage:
                     from .jev.typesafe import TypeSafeJevAdapter
 
                     adapter = TypeSafeJevAdapter()
-                text = render(build(str(args.db), sid, adapter))
+                text = render(build(str(args.db), sid, adapter,
+                                    str(args.board) if args.board else None))
                 store.save_report(sid, text)
                 print(f"generated and saved report for {sid}", file=sys.stderr)
             else:

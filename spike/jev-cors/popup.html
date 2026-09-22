@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Jev CORS spike</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font: 13px/1.5 ui-sans-serif, -apple-system, system-ui, sans-serif;
+      width: 380px; margin: 0; padding: 14px;
+    }
+    h1 { font-size: 13px; margin: 0 0 4px; }
+    p.sub { margin: 0 0 12px; opacity: .7; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit;
+            font-family: ui-monospace, monospace; }
+    button { margin-top: 10px; padding: 6px 12px; font: inherit; cursor: pointer; }
+    #out { margin-top: 12px; padding: 10px; border-radius: 6px;
+           background: rgba(127,127,127,.12); white-space: pre-wrap;
+           font-family: ui-monospace, monospace; font-size: 12px; min-height: 2em; }
+    .ok { color: #1a7f37; font-weight: 600; }
+    .bad { color: #cf222e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Can an extension call Jev directly?</h1>
+  <p class="sub">One real <code>system_one</code> call. No backend, no proxy.</p>
+
+  <label for="key">TYPESAFE_API_KEY</label>
+  <input id="key" type="password" placeholder="sk-..." autocomplete="off">
+  <button id="run">Run the call</button>
+
+  <div id="out">Ready.</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

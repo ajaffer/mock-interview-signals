@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interview Signals</title>
+<meta name="description" content="A live signal layer for human-led mock interviews, built on TypeSafe's Jev. Replay of a recorded session.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #fbfbfa; --panel: #ffffff; --line: #e4e4e1; --ink: #1b1b19;
+    --muted: #6b6b66; --faint: #9a9a94;
+    --accent: #2f6f4f; --warn: #9a6114; --stop: #a33a2c;
+    --chip: #f0f0ed;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16171a; --panel: #1d1f23; --line: #2e3137; --ink: #e8e8e4;
+      --muted: #9a9b96; --faint: #6a6c68;
+      --accent: #7bc29a; --warn: #d6a659; --stop: #e0806f;
+      --chip: #24262b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16171a; --panel: #1d1f23; --line: #2e3137; --ink: #e8e8e4;
+    --muted: #9a9b96; --faint: #6a6c68;
+    --accent: #7bc29a; --warn: #d6a659; --stop: #e0806f;
+    --chip: #24262b;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.6 var(--sans);
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 56px; }
+
+  header { margin-bottom: 20px; }
+  h1 { font-size: 21px; margin: 0 0 6px; letter-spacing: -.01em; }
+  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+  .lede code { font-family: var(--mono); font-size: .88em; background: var(--chip);
+               padding: 1px 5px; border-radius: 4px; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 18px 0 14px; padding: 10px 12px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  }
+  button {
+    font: 500 13px var(--sans); color: var(--ink); background: var(--chip);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 13px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--faint); }
+  button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .clock { font: 500 13px var(--mono); color: var(--muted); margin-left: auto; }
+  .bar { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .panel > h2 {
+    font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase;
+    color: var(--faint); margin: 0; padding: 11px 14px; border-bottom: 1px solid var(--line);
+  }
+
+  #transcript { height: 430px; overflow-y: auto; padding: 12px 14px; }
+  .line { margin-bottom: 11px; font-size: 14px; }
+  .line b { display: block; font: 600 10.5px var(--mono); letter-spacing: .05em;
+            text-transform: uppercase; color: var(--faint); margin-bottom: 1px; }
+  .line.cand b { color: var(--accent); }
+
+  .phase {
+    padding: 13px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 9px;
+  }
+  .phase .name { font: 600 16px var(--sans); }
+  .phase .dur { font: 13px var(--mono); color: var(--muted); margin-left: auto; }
+
+  #cards { padding: 12px 14px; min-height: 152px; }
+  .card {
+    border-left: 3px solid var(--warn); background: var(--chip);
+    border-radius: 0 7px 7px 0; padding: 9px 12px; margin-bottom: 9px;
+    animation: in .22s ease-out;
+  }
+  .card.alarm { border-left-color: var(--stop); }
+  @keyframes in { from { opacity: 0; transform: translateY(-3px); } }
+  .card .top { display: flex; align-items: baseline; gap: 8px; }
+  .card .what { font-weight: 600; font-size: 14px; }
+  .card .num { font: 12px var(--mono); color: var(--muted); margin-left: auto; }
+  .card .why { font-size: 13px; color: var(--muted); margin-top: 1px; }
+  .empty { color: var(--faint); font-size: 13.5px; padding: 6px 0; }
+
+  #dropped { height: 168px; overflow-y: auto; padding: 8px 14px 12px;
+             border-top: 1px solid var(--line); }
+  .drop { display: flex; gap: 8px; align-items: baseline; font: 12px var(--mono);
+          color: var(--faint); padding: 2.5px 0; }
+  .drop .t { min-width: 42px; }
+  .drop .n { color: var(--muted); min-width: 124px; }
+
+  .tally { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px;
+           background: var(--line); border: 1px solid var(--line);
+           border-radius: 10px; overflow: hidden; margin-top: 14px; }
+  @media (max-width: 800px) { .tally { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { .tally { grid-template-columns: repeat(2, 1fr); } }
+  .tally .cost .v { color: var(--accent); }
+  .tally div { background: var(--panel); padding: 13px 14px; }
+  .tally .k { font: 600 10.5px var(--sans); letter-spacing: .07em;
+              text-transform: uppercase; color: var(--faint); }
+  .tally .v { font: 600 22px var(--mono); margin-top: 3px; letter-spacing: -.02em; }
+  .tally .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+  .note { margin-top: 20px; color: var(--muted); font-size: 13.5px; max-width: 74ch; }
+  .note strong { color: var(--ink); font-weight: 600; }
+  footer { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line);
+           color: var(--faint); font-size: 12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Interview Signals</h1>
+  <p class="lede">
+    An interviewer-side signal layer for mock interviews. Transcript goes in;
+    a handful of <strong>typed, bounded decisions</strong> come out &mdash; phase,
+    whether the last question was answered, clarity, rambling. Built on TypeSafe&rsquo;s
+    <code>Jev</code>, which returns labels and probabilities rather than prose,
+    so software can act on them without parsing text.
+  </p>
+</header>
+
+<div class="controls">
+  <button id="play">Pause</button>
+  <button id="restart">Restart</button>
+  <button class="sp" data-x="1">1&times;</button>
+  <button class="sp" data-x="4" aria-pressed="true">4&times;</button>
+  <button class="sp" data-x="12">12&times;</button>
+  <span class="clock" id="clock">0:00</span>
+</div>
+<div class="bar"><i id="prog"></i></div>
+
+<div class="grid">
+  <section class="panel">
+    <h2>Transcript</h2>
+    <div id="transcript"></div>
+  </section>
+
+  <section class="panel">
+    <h2>What the interviewer sees</h2>
+    <div class="phase">
+      <span class="name" id="phase">&mdash;</span>
+      <span class="dur" id="phasedur"></span>
+    </div>
+    <div id="cards"><p class="empty">Nothing yet.</p></div>
+    <div id="dropped"></div>
+  </section>
+</div>
+
+<div class="tally">
+  <div><div class="k">Judgments made</div><div class="v" id="t-made">0</div></div>
+  <div><div class="k">Shown</div><div class="v" id="t-shown">0</div></div>
+  <div><div class="k">Suppressed</div><div class="v" id="t-sup">0<small>%</small></div></div>
+  <div><div class="k">Median latency</div><div class="v" id="t-lat">0<small>ms</small></div></div>
+  <div class="cost"><div class="k">Spent so far</div><div class="v" id="t-cost">0.00<small>&cent;</small></div></div>
+</div>
+
+<p class="note">
+  <strong>The suppressed column is the point.</strong> Jev answers every question it is
+  asked. Deciding which answers are worth an interviewer&rsquo;s attention mid-conversation
+  is a separate layer, and it discards most of them &mdash; for being below threshold,
+  unchanged since last tick, too low-confidence, or simply too soon after the last card.
+  A technically correct signal can still be bad product behaviour.
+</p>
+<p class="note">
+  Questions that fail a code-side precondition are never sent at all: no outstanding
+  question to judge, too little candidate speech, turn too short to ramble. Duration and
+  counting logic stays in code, because Jev 1.13 does not count reliably.
+</p>
+
+<footer id="foot"></footer>
+
+</div>
+
+<script>
+const SESSION = /*__SESSION__*/null;
+
+const LABEL = {
+  answered_question: ["Question not answered", "They went somewhere else"],
+  answer_depth:      ["Shallow answer", "Generalities, no mechanism named"],
+  rambling_risk:     ["Drifting", "Off the thread they started"],
+  clarity:           ["Clarity dropping", "Getting hard to follow"],
+};
+const REASON = {
+  below_threshold: "below threshold", low_confidence: "confidence too low",
+  rate_limited: "too soon after the last card", unchanged: "unchanged since last tick",
+  not_confident_negative: "negative, not confident", not_shallow: "not shallow",
+  phase_dwell: "phase held, not re-shown",
+};
+const CARD_MS = 75000;
+// Jev bills input tokens only, at $0.042 per million; output is free.
+const CENTS_PER_IN_TOKEN = 0.042 / 1e6 * 100;
+
+const $ = id => document.getElementById(id);
+const fmt = ms => `${Math.floor(ms/60000)}:${String(Math.floor(ms/1000)%60).padStart(2,"0")}`;
+const num = d => d.probability != null ? d.probability.toFixed(2)
+               : isNaN(+d.value) ? String(d.value).replace(/_/g, " ")
+               : (+d.value).toFixed(1).replace(/\.0$/, "");
+
+let t = 0, speed = 4, playing = true, last = null;
+let iChunk = 0, iDec = 0, live = [], phaseSince = 0;
+
+function reset() {
+  t = 0; iChunk = 0; iDec = 0; live = []; phaseSince = 0;
+  $("transcript").innerHTML = ""; $("dropped").innerHTML = "";
+  $("cards").innerHTML = '<p class="empty">Nothing yet.</p>';
+  $("phase").textContent = "—"; $("phasedur").textContent = "";
+  $("t-made").textContent = "0"; $("t-shown").textContent = "0";
+  $("t-sup").innerHTML = '0<small>%</small>';
+  $("t-cost").innerHTML = '0.00<small>&cent;</small>';
+}
+
+function addChunk(c) {
+  const el = document.createElement("div");
+  el.className = "line" + (c.speaker === "candidate" ? " cand" : "");
+  el.innerHTML = `<b></b><span></span>`;
+  el.querySelector("b").textContent = c.speaker;
+  el.querySelector("span").textContent = c.text;
+  const box = $("transcript");
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function addDrop(d) {
+  const el = document.createElement("div");
+  el.className = "drop";
+  el.innerHTML = `<span class="t"></span><span class="n"></span><span class="r"></span>`;
+  el.querySelector(".t").textContent = fmt(d.window_end_ms);
+  el.querySelector(".n").textContent = `${d.signal_name} ${num(d)}`;
+  el.querySelector(".r").textContent = REASON[d.suppressed_reason] || d.suppressed_reason;
+  const box = $("dropped");
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function applyDecision(d) {
+  if (d.signal_name === "current_phase") {
+    if (d.visible) {
+      $("phase").textContent = String(d.value).replace(/_/g, " ");
+      phaseSince = d.window_end_ms;
+    } else addDrop(d);
+    return;
+  }
+  if (d.visible) live.push({ d, until: d.window_end_ms + CARD_MS });
+  else addDrop(d);
+}
+
+function drawCards() {
+  const box = $("cards");
+  if (!live.length) { box.innerHTML = '<p class="empty">Nothing right now.</p>'; return; }
+  box.innerHTML = "";
+  for (const { d } of live) {
+    const [what, why] = LABEL[d.signal_name] || [d.signal_name, ""];
+    const el = document.createElement("div");
+    el.className = "card" + (d.probability != null && d.probability < 0.3 ? " alarm" : "");
+    el.innerHTML = `<div class="top"><span class="what"></span><span class="num"></span></div>
+                    <div class="why"></div>`;
+    el.querySelector(".what").textContent = what;
+    el.querySelector(".num").textContent =
+      d.primitive === "noul" ? `p=${d.probability.toFixed(2)}` : num(d);
+    el.querySelector(".why").textContent = why;
+    box.appendChild(el);
+  }
+}
+
+function tally() {
+  const made = iDec;
+  const seen = SESSION.decisions.slice(0, made);
+  const shown = seen.filter(d => d.visible).length;
+  // Every signal in one tick rides a single batched request and carries that
+  // request's token count, so bill each window once rather than per answer.
+  const calls = new Map();
+  for (const d of seen) calls.set(d.window_end_ms, d.in_tokens);
+  let cents = 0;
+  for (const tokens of calls.values()) cents += (tokens || 0) * CENTS_PER_IN_TOKEN;
+  $("t-made").textContent = made;
+  $("t-shown").textContent = shown;
+  $("t-sup").innerHTML = (made ? Math.round((1 - shown / made) * 100) : 0) + "<small>%</small>";
+  $("t-cost").innerHTML = cents.toFixed(2) + "<small>&cent;</small>";
+}
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (last === null) last = now;
+  const dt = now - last;
+  last = now;
+  if (!playing) return;
+
+  t = Math.min(t + dt * speed, SESSION.duration_ms + 2000);
+
+  while (iChunk < SESSION.transcript.length && SESSION.transcript[iChunk].offset_ms <= t)
+    addChunk(SESSION.transcript[iChunk++]);
+
+  let dirty = false;
+  while (iDec < SESSION.decisions.length && SESSION.decisions[iDec].window_end_ms <= t) {
+    applyDecision(SESSION.decisions[iDec++]); dirty = true;
+  }
+  const before = live.length;
+  live = live.filter(c => c.until > t);
+  if (dirty || live.length !== before) { drawCards(); tally(); }
+
+  $("clock").textContent = fmt(Math.min(t, SESSION.duration_ms));
+  $("prog").style.width = Math.min(100, t / SESSION.duration_ms * 100) + "%";
+  if (phaseSince) $("phasedur").textContent = "for " + fmt(Math.max(0, t - phaseSince));
+
+  if (t >= SESSION.duration_ms + 2000) { playing = false; $("play").textContent = "Replay"; }
+}
+
+$("play").addEventListener("click", () => {
+  if (t >= SESSION.duration_ms + 2000) reset();
+  playing = !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+});
+$("restart").addEventListener("click", () => { reset(); playing = true; $("play").textContent = "Pause"; });
+document.querySelectorAll(".sp").forEach(b => b.addEventListener("click", () => {
+  speed = +b.dataset.x;
+  document.querySelectorAll(".sp").forEach(o => o.setAttribute("aria-pressed", o === b));
+}));
+
+(function init() {
+  const lats = SESSION.decisions.map(d => d.latency_ms).filter(Boolean).sort((a, b) => a - b);
+  $("t-lat").innerHTML = Math.round(lats[Math.floor(lats.length / 2)] || 0) + "<small>ms</small>";
+  $("foot").textContent =
+    `Replay of a recorded session · signal set ${SESSION.signal_set_version} · ` +
+    `${SESSION.decisions.length} real Jev decisions over a synthetic transcript. ` +
+    `Costed at Jev's $0.042 per million input tokens, output free. ` +
+    `No API calls are made by this page.`;
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

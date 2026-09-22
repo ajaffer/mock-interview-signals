@@ -14,10 +14,11 @@ Choice per topic, which is exactly the shape Jev is for.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from .board import BoardState, evaluate_board, evaluate_component_coverage, load_board
 from .jev.adapter import JevAdapter
-from .models import Primitive, Speaker
+from .models import Primitive, SignalDecision, Speaker
 from .signals import SignalSpec
 
 #: Topics an interviewer at senior/staff level expects to see covered. Each is
@@ -64,6 +65,11 @@ class SessionReport:
     signals: list[tuple[int, str, str]]        # (t_ms, name, rendered value)
     #: topic -> not_discussed | candidate_raised | interviewer_prompted
     coverage: dict[str, str]
+    #: Whiteboard, when one was supplied. Absent for transcript-only sessions.
+    board: BoardState | None = None
+    board_signals: list[SignalDecision] = field(default_factory=list)
+    #: board component label -> probability it was explained out loud
+    component_coverage: dict[str, float] = field(default_factory=dict)
 
 
 def _fmt(ms: int) -> str:
@@ -166,7 +172,12 @@ def resolve_session_id(store_path: str, session_id: str | None) -> str:
     return row["id"]
 
 
-def build(store_path: str, session_id: str | None, adapter: JevAdapter | None) -> SessionReport:
+def build(
+    store_path: str,
+    session_id: str | None,
+    adapter: JevAdapter | None,
+    board_path: str | None = None,
+) -> SessionReport:
     row, chunks, decisions = _load(store_path, session_id)
     if not chunks:
         raise SystemExit("session has no transcript; nothing to report")
@@ -181,6 +192,18 @@ def build(store_path: str, session_id: str | None, adapter: JevAdapter | None) -
                     else str(d["value"]))
         shown.append((d["window_end_ms"], d["signal_name"], rendered))
 
+    board = load_board(board_path) if board_path else None
+    board_signals: list[SignalDecision] = []
+    component_coverage: dict[str, float] = {}
+    if board is not None and adapter is not None:
+        board_signals = evaluate_board(adapter, board, end_ms=end_ms)
+        component_coverage = evaluate_component_coverage(
+            adapter,
+            board,
+            [{"speaker": c["speaker"], "text": c["text"]} for c in chunks],
+            end_ms=end_ms,
+        )
+
     return SessionReport(
         session_id=row["id"],
         source_ref=row["source_ref"],
@@ -190,6 +213,9 @@ def build(store_path: str, session_id: str | None, adapter: JevAdapter | None) -
         longest_candidate_turn_ms=longest,
         signals=shown,
         coverage=_coverage(adapter, chunks, end_ms) if adapter else {},
+        board=board,
+        board_signals=board_signals,
+        component_coverage=component_coverage,
     )
 
 
@@ -265,6 +291,46 @@ def render(r: SessionReport) -> str:
             a(f"**{label}** ({len(items)})")
             a("")
             a(("- " + "\n- ".join(items)) if items else "- none")
+            a("")
+
+    if r.board is not None:
+        a("## Whiteboard")
+        a("")
+        a(f"Source: {r.board.source_ref}"
+          + (" (transcribed from a screenshot by a vision model, not an export)"
+             if r.board.extraction == "image" else ""))
+        a("")
+        a(f"{len(r.board.components)} components, {len(r.board.relationships)} "
+          f"connections drawn"
+          + (f", {r.board.deleted_count} elements drawn then deleted."
+             if r.board.deleted_count else "."))
+        a("")
+        a("```")
+        a(r.board.render())
+        a("```")
+        a("")
+        if r.board_signals:
+            a("What the board shows, judged against the board alone:")
+            a("")
+            a("| Signal | Answer |")
+            a("|---|---|")
+            for d in r.board_signals:
+                value = (f"{d.probability:.0%} likely yes" if d.probability is not None
+                         else str(d.value).replace("_", " "))
+                a(f"| {d.signal_name.replace('_', ' ')} | {value} |")
+            a("")
+        if r.component_coverage:
+            # The one board-plus-transcript judgment: drawn but never explained.
+            # Sorted so the least-explained components are read first.
+            quiet = sorted(r.component_coverage.items(), key=lambda kv: kv[1])
+            unexplained = [(name, p) for name, p in quiet if p < 0.5]
+            a("**Drawn but never explained out loud**")
+            a("")
+            if unexplained:
+                for name, prob in unexplained:
+                    a(f"- {name} ({prob:.0%} likely explained)")
+            else:
+                a("- none; every component on the board was explained")
             a("")
 
     a("## Signals during the session")

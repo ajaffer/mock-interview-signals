@@ -149,16 +149,28 @@ class _Stream(threading.Thread):
 
 
 class DualCapture:
-    """Capture interviewer and candidate as separate labelled streams."""
+    """Capture interviewer and candidate as separate labelled streams.
+
+    `mic_speaker` says which side of the interview the microphone is. It is
+    normally the interviewer, but in a peer swap -- two people taking turns
+    interviewing each other in one sitting -- the second half has the operator
+    as the candidate. Recording that half with the default mapping inverts
+    every role label in the session log, which silently flips talk-time split,
+    the topic-coverage verdicts and the candidate-dependent signals. Deciding
+    it here keeps the rest of the pipeline unaware that roles can swap.
+    """
 
     def __init__(self, mic_device: int, system_device: int | None,
-                 window_s: float = 5.0) -> None:
+                 window_s: float = 5.0,
+                 mic_speaker: Speaker = Speaker.INTERVIEWER) -> None:
         self.sink: queue.Queue[AudioChunk] = queue.Queue()
         self.started_at = time.monotonic()
-        self.streams = [_Stream(mic_device, Speaker.INTERVIEWER, self.sink,
+        other = (Speaker.CANDIDATE if mic_speaker is Speaker.INTERVIEWER
+                 else Speaker.INTERVIEWER)
+        self.streams = [_Stream(mic_device, mic_speaker, self.sink,
                                 self.started_at, window_s)]
         if system_device is not None:
-            self.streams.append(_Stream(system_device, Speaker.CANDIDATE, self.sink,
+            self.streams.append(_Stream(system_device, other, self.sink,
                                         self.started_at, window_s))
 
     def start(self) -> None:

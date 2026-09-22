@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Jev CORS spike",
+  "version": "1.0",
+  "description": "Checks whether a Chrome extension can call the TypeSafe API directly, with no backend.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://api.typesafe.ai/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Jev CORS spike"
+  }
+}

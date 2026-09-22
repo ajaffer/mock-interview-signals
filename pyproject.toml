@@ -9,6 +9,7 @@ dependencies = [
 
 [project.optional-dependencies]
 jev = ["typesafe-sdk"]
+vision = ["anthropic"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]

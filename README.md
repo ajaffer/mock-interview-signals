@@ -6,7 +6,32 @@ whether to probe, redirect, or move on, while the interview is still running.
 
 Live signals are for the interviewer only. The candidate never sees them.
 
-Phase 1 (offline transcript replay) is what exists today.
+**[Watch it run](https://ajaffer.github.io/interview-signals.html)** — a replay of a
+recorded session: real Jev decisions over a synthetic transcript, no API calls.
+
+Offline replay, live audio capture, whiteboard extraction and the post-session
+evidence pack all work today.
+
+## What is actually proven
+
+Stated up front because it is the part most likely to be overclaimed.
+
+| Signal | Evidence |
+|---|---|
+| `current_phase` | Holds up across six interviews. The one the interviewer reports using. |
+| `clarity` | Reasonable, evidence across several sessions. |
+| `answer_depth` | New and unvalidated. Treat as a hypothesis. |
+| `answered_question` | **Known to miss.** Scored every exchange in one session as answered when at least two were not. |
+| `rambling_risk` | Fires rarely. A written prediction that it never would was falsified. |
+
+A usefulness gate on 2026-09-20 **failed** — not because a signal was wrong, but because
+it was right about something the interviewer had already noticed. Accuracy is not
+usefulness, and the gate is written to measure the second. `mis label` and `mis gate`
+exist to settle it with data rather than recollection.
+
+Measured on a real 10-minute session: 119 judgments, 8 shown (**93% suppressed**), 81 of
+200 questions never sent because a precondition blocked them, **0.25¢** total, **119ms**
+median per batched call.
 
 ## Quick start
 
@@ -30,6 +55,16 @@ export TYPESAFE_API_KEY=...
 Useful flags: `--show-suppressed` (see what was hidden and why), `--db` (persist a session
 log), `--json` (export it), `--tick-ms` (evaluation cadence).
 
+Live, against a real interview:
+
+```bash
+./.venv/bin/mis live --mic <name> --system <name>   # add --my-role candidate in a peer swap
+./.venv/bin/mis label                               # afterwards: what was actually useful
+./.venv/bin/mis gate                                # where that leaves the usefulness gate
+```
+
+`mis report --board board.excalidraw` adds whiteboard analysis to the evidence pack.
+
 ## How it fits together
 
 ```
@@ -46,6 +81,10 @@ JSONL transcript -> chunker -> rolling state -> preconditions -> Jev adapter
 | `policy.py` | Thresholds, dwell, rate limits, display budget |
 | `store.py` | SQLite session log |
 | `replay.py` | The tick loop |
+| `live/` | Dual-stream capture, local transcription, the live session |
+| `board.py` | Whiteboard state from an Excalidraw export or a screenshot |
+| `report.py` | Post-session evidence pack |
+| `label.py` | Post-session labelling — the usefulness-gate instrument |
 
 Three things are load-bearing and easy to break:
 
