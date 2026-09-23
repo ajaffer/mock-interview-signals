@@ -73,6 +73,10 @@ them.
 
 ## How it fits together
 
+**[ARCHITECTURE.md](ARCHITECTURE.md)** has the pipeline in full, with diagrams:
+how it decides what to ask, how the request is built, and how 93% of correct
+answers get discarded before anyone sees them.
+
 ```
 JSONL transcript -> chunker -> rolling state -> preconditions -> Jev adapter
   -> signal policy -> interviewer output / session log
