@@ -550,7 +550,7 @@ def test_delete_vacuums_so_the_text_is_really_gone(tmp_path):
 
 def test_stored_utc_is_displayed_in_local_time():
     """An interview finished at 1:45pm should not be listed as 20:45."""
-    from datetime import UTC, datetime
+    from datetime import datetime
 
     from cue.cli import _local
 
