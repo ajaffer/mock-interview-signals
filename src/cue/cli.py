@@ -117,7 +117,8 @@ def _sessions(args) -> int:
                 print("\nThis session also has a trace, which holds the transcript:")
                 for path in stale:
                     print(f"  {path}")
-                print("  delete it with 'cue traces --purge'")
+                print(f"  delete just that one with 'cue traces --purge {sid[:8]}'")
+                print("  ('cue traces --purge' with no argument deletes them all)")
             return 0
 
         if args.note:
@@ -201,19 +202,30 @@ def _traces(args) -> int:
         print("No traces. Run with --trace to record one.")
         return 0
 
+    targets = rows
+    if args.purge and args.purge != "ALL":
+        targets = [r for r in rows if args.purge in r[0].name]
+        if not targets:
+            print(f"No trace matching {args.purge!r}. On disk:")
+            for path, *_ in rows:
+                print(f"  {path.name}")
+            return 2
+
     total = 0
     print(f"{'file':<44}{'size':>9}{'jev calls':>11}{'lines':>8}")
     for path, size, calls, lines in rows:
         total += size
-        print(f"{path.name:<44}{size // 1024:>7}KB{calls:>11}{lines:>8}")
+        mark = "  <-" if args.purge and (path, size, calls, lines) in targets else ""
+        print(f"{path.name:<44}{size // 1024:>7}KB{calls:>11}{lines:>8}{mark}")
     print(f"\n{len(rows)} trace(s), {total // 1024}KB. These contain transcript text.")
 
     if args.purge:
-        for path, *_ in rows:
+        for path, *_ in targets:
             path.unlink()
-        print(f"Deleted {len(rows)} trace(s).")
+        print(f"Deleted {len(targets)} trace(s).")
     else:
-        print("'cue traces --purge' deletes them all.")
+        print("'cue traces --purge <session>' deletes one, "
+              "'cue traces --purge' deletes them all.")
     return 0
 
 
@@ -402,7 +414,8 @@ def main(argv: list[str] | None = None) -> int:
 
     tr = sub.add_parser("traces", help="List session traces, or delete them")
     tr.add_argument("--dir", type=Path, default=None)
-    tr.add_argument("--purge", action="store_true", help="Delete every trace")
+    tr.add_argument("--purge", nargs="?", const="ALL", metavar="SESSION",
+                    help="Delete one session's trace, or every trace with no argument")
 
     bd = sub.add_parser("board", help="Show the extracted state of a whiteboard")
     bd.add_argument("board", type=Path,

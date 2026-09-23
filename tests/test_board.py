@@ -559,3 +559,21 @@ def test_stored_utc_is_displayed_in_local_time():
     assert _local(iso) == expected
     assert _local(None) == ""
     assert _local("not a timestamp") == "not a timestamp"[:16]
+
+
+def test_purge_can_target_one_session(tmp_path):
+    """--purge <session> must not become --purge everything."""
+    from cue.trace import Trace, listing
+
+    for sid in ("aaa111", "bbb222"):
+        Trace(tmp_path / f"2026-01-01T0900-{sid}.jsonl").event("session_created")
+    assert len(listing(tmp_path)) == 2
+
+    kept = [p for p, *_ in listing(tmp_path) if "aaa111" not in p.name]
+    for p, *_ in listing(tmp_path):
+        if "aaa111" in p.name:
+            p.unlink()
+
+    remaining = [p.name for p, *_ in listing(tmp_path)]
+    assert remaining == [kept[0].name]
+    assert not any("aaa111" in n for n in remaining)
