@@ -30,7 +30,7 @@ usefulness, and the gate is written to measure the second. `mis label` and `mis 
 exist to settle it with data rather than recollection.
 
 Measured on a real 10-minute session: 119 judgments, 8 shown (**93% suppressed**), 81 of
-200 questions never sent because a precondition blocked them, **0.25¢** total, **119ms**
+200 questions never sent because a precondition blocked them, **$0.0025** total (a quarter of a cent), **119ms**
 median per batched call.
 
 ## Quick start

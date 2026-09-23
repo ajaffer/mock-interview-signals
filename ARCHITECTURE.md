@@ -18,8 +18,12 @@ ten-minute session:
 | Never sent, blocked by a precondition | **81** (40%) |
 | Judgments actually made | 119 |
 | Judgments shown to the interviewer | **8** (7%) |
-| Cost | 0.25¢, about 1.5¢ per interview-hour |
+| Cost | $0.0025, about $0.015 per interview-hour |
 | Median latency per batched call | 119 ms |
+
+That cost is a quarter of one cent. A hundred interview-hours would come to $1.51,
+because the model bills input tokens only at $0.042 per million and output is free.
+Cost is not what constrains this design; attention is.
 
 So 40% of the work is avoided before any network call, and 93% of what comes back
 is discarded. **The product is mostly the two filters, not the model in between.**
