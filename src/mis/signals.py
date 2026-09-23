@@ -13,7 +13,9 @@ have to live in the text sent to the model, not in a comment here.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import hashlib
+import json
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from .models import Phase, Primitive
@@ -44,12 +46,14 @@ MIN_CONTINUOUS_MS = 45_000
 
 
 def _phase_precondition(state: RollingState) -> str | None:
+    """After the first minute. Before that there is only greeting and audio checks."""
     if state.now_ms < COLD_START_MS:
         return "cold_start"
     return None
 
 
 def _answered_precondition(state: RollingState) -> str | None:
+    """A question is open, and the candidate has had 20 seconds to start on it."""
     elapsed = state.ms_since_interviewer_question
     if elapsed is None:
         return "no_outstanding_question"
@@ -59,18 +63,21 @@ def _answered_precondition(state: RollingState) -> str | None:
 
 
 def _clarity_precondition(state: RollingState) -> str | None:
+    """At least 90 seconds of candidate speech in the window to judge."""
     if state.candidate_speech_ms_in_window < MIN_CANDIDATE_SPEECH_MS:
         return "insufficient_candidate_speech"
     return None
 
 
 def _rambling_precondition(state: RollingState) -> str | None:
+    """The candidate is 45 seconds into an uninterrupted stretch."""
     if state.continuous_candidate_ms < MIN_CONTINUOUS_MS:
         return "short_turn"
     return None
 
 
 def _tradeoff_precondition(state: RollingState) -> str | None:
+    """The session has reached high level design."""
     if not state.has_reached(Phase.HIGH_LEVEL_DESIGN):
         return "phase_not_reached"
     return None
@@ -228,6 +235,28 @@ ANSWER_DEPTH = SignalSpec(
     },
     precondition=_answered_precondition,
 )
+
+def fingerprint(specs: Sequence[SignalSpec] = ()) -> str:
+    """A hash of every word sent to Jev.
+
+    The questions are versioned artifacts, not configuration. `signal_version`
+    is stamped on every stored decision so a replay from weeks ago stays
+    comparable to one from today, and that guarantee is worthless if the
+    wording can drift while the version stays put.
+
+    A test pins this value. Reword a question, add a criterion, change a
+    primitive, and the test fails and tells you to bump SIGNAL_SET_VERSION.
+    That is the intended workflow, not an obstacle: changing what Jev is asked
+    should be a deliberate act with a version attached.
+    """
+    h = hashlib.sha256()
+    for spec in (specs or SIGNAL_SET):
+        h.update(spec.name.encode())
+        h.update(spec.primitive.value.encode())
+        h.update(spec.instructions.encode())
+        h.update(json.dumps(spec.criteria, sort_keys=True, default=str).encode())
+    return h.hexdigest()[:16]
+
 
 SIGNAL_SET: tuple[SignalSpec, ...] = (
     CURRENT_PHASE,

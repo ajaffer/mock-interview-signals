@@ -98,6 +98,51 @@ def _sessions(args) -> int:
         store.close()
 
 
+def _signals(args) -> int:
+    """The five questions, as sent. Read-only on purpose.
+
+    Editing them is a source change plus a version bump, not a config tweak,
+    because every stored decision is stamped with the version that produced it.
+    """
+    from .models import SIGNAL_SET_VERSION
+    from .signals import SIGNAL_SET, fingerprint
+
+    print(f"signal set {SIGNAL_SET_VERSION}   fingerprint {fingerprint()}")
+    print("defined in src/mis/signals.py, pinned by tests/test_signals_pinned.py\n")
+
+    for spec in SIGNAL_SET:
+        print("=" * 78)
+        print(f"{spec.name}   [{spec.primitive.value}]")
+        print("=" * 78)
+        print("\nASKED WHEN")
+        reason = spec.precondition.__doc__ or spec.precondition.__name__
+        print(f"  {reason.strip().splitlines()[0]}")
+        print("\nINSTRUCTIONS")
+        for line in _wrap(spec.instructions):
+            print(f"  {line}")
+        if spec.criteria:
+            print("\nCRITERIA")
+            items = (spec.criteria.items() if isinstance(spec.criteria, dict)
+                     else enumerate(spec.criteria))
+            for key, text in items:
+                body = _wrap(str(text), width=68)
+                if not args.full:
+                    body = body[:1] + (["..."] if len(body) > 1 else [])
+                print(f"  {key}:")
+                for line in body:
+                    print(f"      {line}")
+        print()
+    if not args.full:
+        print("--full for complete criteria text.")
+    return 0
+
+
+def _wrap(text: str, width: int = 74) -> list[str]:
+    import textwrap
+
+    return textwrap.wrap(" ".join(text.split()), width=width)
+
+
 def _traces(args) -> int:
     """Traces hold transcript text. Listing them is how you remember to delete."""
     from .trace import listing
@@ -300,6 +345,9 @@ def main(argv: list[str] | None = None) -> int:
     gt.add_argument("--db", type=Path, default=Path("sessions.db"))
     gt.add_argument("--target", type=int, default=10, help="Sessions the gate needs")
 
+    sg = sub.add_parser("signals", help="Show the exact questions sent to Jev")
+    sg.add_argument("--full", action="store_true", help="Include every criterion")
+
     tr = sub.add_parser("traces", help="List session traces, or delete them")
     tr.add_argument("--dir", type=Path, default=None)
     tr.add_argument("--purge", action="store_true", help="Delete every trace")
@@ -366,6 +414,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Multi-Output Device that includes BlackHole (menu bar: option-click")
             print("the volume icon), not to your headset directly.")
         return 0
+
+    if args.command == "signals":
+        return _signals(args)
 
     if args.command == "traces":
         return _traces(args)

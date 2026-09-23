@@ -83,6 +83,7 @@ JSONL transcript -> chunker -> rolling state -> preconditions -> Jev adapter
 | `transcript.py` | JSONL import, speaker normalization, content hashing |
 | `state.py` | Bounded window, code-resolved facts (outstanding question, durations) |
 | `signals.py` | The five signals: question text, criteria, and preconditions |
+| `trace.py` | Per-session log of everything sent to and received from Jev |
 | `jev/` | The only place that talks to TypeSafe. Protocol + fake + real |
 | `policy.py` | Thresholds, dwell, rate limits, display budget |
 | `store.py` | SQLite session log |
@@ -105,6 +106,26 @@ of the batch entirely rather than asked and discarded.
 **The evaluator and the policy are separate layers.** One answers "what does the model say";
 the other answers "should a person see it". A correct signal shown at the wrong moment is
 still bad behavior. Do not merge them.
+
+## The questions
+
+The five questions are Python constants in `signals.py`. Nothing generates them and
+nothing varies them; every tick sends the same wording and only the transcript window
+underneath changes.
+
+```bash
+./.venv/bin/mis signals          # all five, as sent
+./.venv/bin/mis signals --full   # with complete criteria
+```
+
+They are deliberately **not** configuration. Every stored decision is stamped with
+`signal_version`, which is what lets a replay from weeks ago be compared to one from
+today, and that guarantee only holds while the version and the wording move together.
+So a fingerprint over the question text is pinned in `tests/test_signals_pinned.py`:
+reword a question without bumping `SIGNAL_SET_VERSION` and the suite fails and tells
+you what to do.
+
+Changing what the model is asked should be a deliberate act with a version attached.
 
 ## Operating notes
 
