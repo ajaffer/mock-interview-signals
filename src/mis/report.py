@@ -223,11 +223,11 @@ def render(r: SessionReport) -> str:
     out: list[str] = []
     a = out.append
 
-    a(f"# Session evidence — {r.session_id}")
+    a(f"# Session evidence, {r.session_id}")
     a("")
     a(f"Source: {r.source_ref or 'live'} · Length: {_fmt(r.duration_ms)}")
     a("")
-    a("Facts to write feedback from. Not feedback — the judgments are yours.")
+    a("Facts to write feedback from. Not feedback, the judgments are yours.")
     a("")
 
     a("## Time allocation")

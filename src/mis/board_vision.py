@@ -1,9 +1,9 @@
 """Whiteboard extraction from a screenshot (ADR 008).
 
-Some platforms -- interviewing.io among them -- do not let you export the
-board. A screenshot is all there is, so this reads one into the same
-`BoardState` that `board.load_excalidraw` produces. Everything downstream is
-identical from that point on.
+Some interview platforms do not let you export the board. A screenshot is all
+there is, so this reads one into the same `BoardState` that
+`board.load_excalidraw` produces. Everything downstream is identical from that
+point on.
 
 The division of labour matters and is the reason this does not violate the
 project's central constraint. This module runs a **vision model as the board

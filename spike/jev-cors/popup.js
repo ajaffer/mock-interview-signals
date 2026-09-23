@@ -91,7 +91,7 @@ document.getElementById("run").addEventListener("click", async () => {
         `<span class="bad">HTTP ${res.status}</span> in ${ms}ms\n\n${text}\n\n` +
           (text.includes("CORS")
             ? "Blocked by the origin allowlist. A backend proxy is required."
-            : "Reached the API but the request was rejected — check the key.")
+            : "Reached the API but the request was rejected, check the key.")
       );
       return;
     }
@@ -111,7 +111,7 @@ document.getElementById("run").addEventListener("click", async () => {
     show(
       `<span class="bad">fetch threw</span> after ${Math.round(performance.now() - started)}ms\n\n` +
         `${err}\n\nAn opaque "Failed to fetch" here means the browser blocked it ` +
-        `before it left — CORS. Check host_permissions in manifest.json.`
+        `before it left, CORS. Check host_permissions in manifest.json.`
     );
   }
 });

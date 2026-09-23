@@ -97,7 +97,7 @@ def run(db: Path, session_id: str | None) -> int:
             "SELECT MAX(offset_ms) AS d FROM transcript_chunks WHERE session_id=?",
             (sid,)).fetchone()["d"] or 0
 
-        print(f"\nSession {sid} — {_fmt(duration)}, {len(cards)} card(s) shown")
+        print(f"\nSession {sid}, {_fmt(duration)}, {len(cards)} card(s) shown")
         if duration:
             print(f"Card rate: {len(cards) / max(duration / 3_600_000, 1e-9):.0f}/hour")
 

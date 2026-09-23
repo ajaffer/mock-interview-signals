@@ -8,9 +8,9 @@ this summary.
 Two things about Excalidraw scenes that the extraction has to handle, because
 getting either wrong silently changes the answer:
 
-* Deleted elements stay in the file with `isDeleted: true`. Both boards from
-  2026-09-21 carry a dozen of them -- components the candidate drew and then
-  removed. Counting those as present would invent structure that is not there.
+* Deleted elements stay in the file with `isDeleted: true`, and a real board
+  carries plenty of them: components drawn and then removed. Counting those as
+  present would invent structure that is not there.
 * A shape's label is bound to it (`containerId`) only when it was typed into
   the shape. Labels typed *next to* a shape are free-floating text that happens
   to sit inside its bounds, which is how most of these boards are drawn.
@@ -314,10 +314,10 @@ def _contains(shape: dict, point: tuple[float, float]) -> bool:
             and sy <= y <= sy + float(shape.get("height", 0)))
 
 
-#: How far outside a shape a label may sit and still belong to it. A long name
-#: typed against a narrow box overflows it -- "API GW / * Routing / * Rate
-#: Limiting" lands 39px outside a 67px-wide rectangle on the 2026-09-21 board --
-#: and dropping it would report a real, named component as unlabelled.
+#: How far outside a shape a label may sit and still belong to it. A multi-line
+#: name typed against a narrow box overflows it, landing tens of pixels clear of
+#: a rectangle only a few dozen wide. Dropping it would report a real, named
+#: component as unlabelled.
 NEAR_PX = 60.0
 
 

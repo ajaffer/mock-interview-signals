@@ -10,7 +10,7 @@ Phase 0 needs **3 to 5** transcripts or transcript-like samples. Current count: 
 |---|---|---|---|
 | `fixtures/sample-001-url-shortener` | synthetic | ~14 min | Hand-written to exercise all five signals; not a real session |
 
-Four more needed. The synthetic one is a format and fixture reference — it cannot validate signal quality, because it was written knowing what the signals look for.
+Four more needed. The synthetic one is a format and fixture reference, it cannot validate signal quality, because it was written knowing what the signals look for.
 
 ## Layout
 
@@ -23,7 +23,7 @@ transcripts/
 
 `.gitignore` is default-deny for this directory: everything under `transcripts/` is ignored unless explicitly allow-listed, and only `fixtures/` and this README are. A real transcript dropped anywhere here is ignored by default rather than needing someone to remember to exclude it.
 
-Synthetic fixtures are tracked because they are safe to share and useful to version — a changed fixture should show up in a diff, and the test suite can smoke-test against one. Real transcripts are never tracked.
+Synthetic fixtures are tracked because they are safe to share and useful to version, a changed fixture should show up in a diff, and the test suite can smoke-test against one. Real transcripts are never tracked.
 
 ## Where Real Transcripts Can Come From
 
@@ -60,7 +60,7 @@ Settled as ADR 003 in [../docs/jev-architecture.md](../docs/jev-architecture.md)
 
 ## Labels
 
-Human labels live next to their transcript (`fixtures/labels/<id>.labels.json` for fixtures, `private/labels/` for real sessions) and follow the schema in the Phase 0 spec. Label the moments a human actually noticed — not every window. Phase 1 scores precision against flagged moments and recall against this list.
+Human labels live next to their transcript (`fixtures/labels/<id>.labels.json` for fixtures, `private/labels/` for real sessions) and follow the schema in the Phase 0 spec. Label the moments a human actually noticed, not every window. Phase 1 scores precision against flagged moments and recall against this list.
 
 Label a transcript **before** running it through Jev. Labeling after seeing the model output contaminates the comparison.
 

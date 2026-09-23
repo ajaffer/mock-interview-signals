@@ -1,12 +1,12 @@
 # mock-interview-signals
 
 An interviewer-side signal layer for human-led mock interviews. Transcript state goes in;
-a small set of bounded, typed judgments comes out — enough for an interviewer to decide
+a small set of bounded, typed judgments comes out, enough for an interviewer to decide
 whether to probe, redirect, or move on, while the interview is still running.
 
 Live signals are for the interviewer only. The candidate never sees them.
 
-**[Watch it run](https://ajaffer.github.io/interview-signals.html)** — a replay of a
+**[Watch it run](https://ajaffer.github.io/interview-signals.html)**, a replay of a
 recorded session: real Jev decisions over a synthetic transcript, no API calls.
 
 Offline replay, live audio capture, whiteboard extraction and the post-session
@@ -24,7 +24,7 @@ Stated up front because it is the part most likely to be overclaimed.
 | `answered_question` | **Known to miss.** Scored every exchange in one session as answered when at least two were not. |
 | `rambling_risk` | Fires rarely. A written prediction that it never would was falsified. |
 
-A usefulness gate on 2026-09-20 **failed** — not because a signal was wrong, but because
+A usefulness gate on 2026-09-20 **failed**, not because a signal was wrong, but because
 it was right about something the interviewer had already noticed. Accuracy is not
 usefulness, and the gate is written to measure the second. `mis label` and `mis gate`
 exist to settle it with data rather than recollection.
@@ -40,7 +40,7 @@ python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
 ./.venv/bin/mis replay transcripts/fixtures/sample-001-url-shortener.jsonl
 ```
 
-That runs against a **fake adapter** — keyword heuristics that exercise the pipeline
+That runs against a **fake adapter**, keyword heuristics that exercise the pipeline
 without network or credentials. It is not a proxy for model judgment, and no threshold
 should be tuned against it.
 
@@ -84,7 +84,7 @@ JSONL transcript -> chunker -> rolling state -> preconditions -> Jev adapter
 | `live/` | Dual-stream capture, local transcription, the live session |
 | `board.py` | Whiteboard state from an Excalidraw export or a screenshot |
 | `report.py` | Post-session evidence pack |
-| `label.py` | Post-session labelling — the usefulness-gate instrument |
+| `label.py` | Post-session labelling, the usefulness-gate instrument |
 
 Three things are load-bearing and easy to break:
 
@@ -93,7 +93,7 @@ rejects a Noul that arrives with one, because policy code gating on a field that
 exist would silently never fire.
 
 **Preconditions gate the request, not the response.** All timing and counting happens in
-code — the model is unreliable at both — and a signal whose precondition fails is left out
+code, the model is unreliable at both, and a signal whose precondition fails is left out
 of the batch entirely rather than asked and discarded.
 
 **The evaluator and the policy are separate layers.** One answers "what does the model say";
@@ -103,7 +103,7 @@ still bad behavior. Do not merge them.
 ## Transcripts
 
 `transcripts/fixtures/` holds synthetic transcripts and is tracked. `transcripts/private/`
-is for real ones and is gitignored — the directory is default-deny, so anything dropped
+is for real ones and is gitignored, the directory is default-deny, so anything dropped
 there is ignored unless explicitly allow-listed.
 
 ## Tests
