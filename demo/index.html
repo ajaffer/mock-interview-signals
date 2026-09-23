@@ -207,6 +207,9 @@ const CENTS_PER_IN_TOKEN = 0.042 / 1e6 * 100;
 
 const $ = id => document.getElementById(id);
 const fmt = ms => `${Math.floor(ms/60000)}:${String(Math.floor(ms/1000)%60).padStart(2,"0")}`;
+// A suppressed row can carry a label rather than a number: current_phase
+// reports "high_level_design", not a score. Coercing that with + yields NaN,
+// which is what 31 of the 111 suppressed rows once displayed.
 const num = d => d.probability != null ? d.probability.toFixed(2)
                : isNaN(+d.value) ? String(d.value).replace(/_/g, " ")
                : (+d.value).toFixed(1).replace(/\.0$/, "");
@@ -332,7 +335,11 @@ document.querySelectorAll(".sp").forEach(b => b.addEventListener("click", () => 
 }));
 
 (function init() {
-  const lats = SESSION.decisions.map(d => d.latency_ms).filter(Boolean).sort((a, b) => a - b);
+  // One request answers every signal in a tick, so a per-decision median counts
+  // the same call several times. Median per call is what "per call" means.
+  const perCall = new Map();
+  for (const d of SESSION.decisions) perCall.set(d.window_end_ms, d.latency_ms);
+  const lats = [...perCall.values()].filter(Boolean).sort((a, b) => a - b);
   $("t-lat").innerHTML = Math.round(lats[Math.floor(lats.length / 2)] || 0) + "<small>ms</small>";
   $("foot").textContent =
     `Replay of a recorded session · signal set ${SESSION.signal_set_version} · ` +

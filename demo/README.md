@@ -91,19 +91,3 @@ That is the right outcome anyway: reaching it would mean an API key in public Ja
 Replaying a recorded session gives real answers, real latencies and the real suppression
 rate with no key, no backend and no running cost. See [`spike/jev-cors/`](../spike/jev-cors/)
 for what an *extension* can do, which is a different question with a different answer.
-
-## Two fixes that came back from the published copy
-
-The site integration found a real bug and added a feature; both are now in
-`template.html`, so a rebuild keeps them.
-
-- **Non-numeric values rendered as `NaN`.** The suppressed feed formatted every value as a
-  number, but a suppressed `current_phase` row carries a label, not a number. 31 of the
-  111 suppressed rows in the sample session showed `current_phase NaN`. Fixed by falling
-  back to the label text.
-- **A running cost tile.** Jev bills input tokens only, at
-  [$0.042 per million, output free](https://docs.typesafe.ai/models). Every signal in a
-  tick rides one batched request and carries that request's token count, so the tally bills
-  each window once rather than once per answer. The sample session totals **0.25¢ over 39
-  calls** — which is the number that makes the whole approach look reasonable, so it earns
-  its place on the page.
