@@ -72,4 +72,13 @@ def create_app(session: LiveSession, worker: threading.Thread | None = None) -> 
         session.stop()
         return {"mode": session.mode, "session_id": session.session_id}
 
+    @app.get("/summary")
+    async def summary() -> dict:
+        """Facts available the instant a session ends. No model call."""
+        if session.store is None:
+            return {"unavailable": "running with --no-db, nothing was recorded"}
+        from .summary import build
+
+        return build(session.store, session.session_id)
+
     return app

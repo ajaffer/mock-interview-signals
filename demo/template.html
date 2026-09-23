@@ -114,6 +114,25 @@
   .tally .v { font: 600 22px var(--mono); margin-top: 3px; letter-spacing: -.02em; }
   .tally .v small { font-size: 12px; font-weight: 400; color: var(--muted); }
 
+  /* Mirrors what the real tool shows when Stop is pressed. */
+  #summary { display: none; margin-top: 14px; background: var(--panel);
+             border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+  #summary.on { display: block; }
+  #summary h3 { font: 600 10.5px var(--sans); letter-spacing: .07em;
+                text-transform: uppercase; color: var(--faint); margin: 16px 0 7px; }
+  #summary h3:first-child { margin-top: 0; }
+  #summary table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #summary td { padding: 3px 0; }
+  #summary td.n { text-align: right; color: var(--muted);
+                  font-variant-numeric: tabular-nums; }
+  #summary .meter { height: 4px; background: var(--chip); border-radius: 2px;
+                    margin-top: 3px; }
+  #summary .meter > i { display: block; height: 100%; background: var(--accent);
+                        border-radius: 2px; }
+  #summary .next { margin-top: 16px; padding: 10px 12px; background: var(--chip);
+                   border-radius: 7px; font-size: 13px; color: var(--muted); }
+  #summary code { font-family: var(--mono); font-size: .92em; color: var(--ink); }
+
   .note { margin-top: 20px; color: var(--muted); font-size: 13.5px; max-width: 74ch; }
   .note strong { color: var(--ink); font-weight: 600; }
   footer { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line);
@@ -136,6 +155,7 @@
 
 <div class="controls">
   <button id="play">Pause</button>
+  <button id="stop">Stop</button>
   <button id="restart">Restart</button>
   <button class="sp" data-x="1">1&times;</button>
   <button class="sp" data-x="4" aria-pressed="true">4&times;</button>
@@ -160,6 +180,8 @@
     <div id="dropped"></div>
   </section>
 </div>
+
+<div id="summary"></div>
 
 <div class="tally">
   <div><div class="k">Judgments made</div><div class="v" id="t-made">0</div></div>
@@ -320,15 +342,95 @@ function frame(now) {
   $("prog").style.width = Math.min(100, t / SESSION.duration_ms * 100) + "%";
   if (phaseSince) $("phasedur").textContent = "for " + fmt(Math.max(0, t - phaseSince));
 
-  if (t >= SESSION.duration_ms + 2000) { playing = false; $("play").textContent = "Replay"; }
+  if (t >= SESSION.duration_ms + 2000 && !$("summary").classList.contains("on")) endSession();
 }
 
 $("play").addEventListener("click", () => {
-  if (t >= SESSION.duration_ms + 2000) reset();
+  if (t >= SESSION.duration_ms + 2000) { reset(); $("summary").classList.remove("on"); }
   playing = !playing;
   $("play").textContent = playing ? "Pause" : "Play";
 });
-$("restart").addEventListener("click", () => { reset(); playing = true; $("play").textContent = "Pause"; });
+function endSession() {
+  playing = false;
+  $("play").textContent = "Replay";
+  $("summary").classList.add("on");
+  $("summary").innerHTML = renderSummary();
+  $("summary").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// The same facts the real tool shows on Stop, computed here from the recorded
+// session rather than fetched, since this page makes no requests at all.
+function renderSummary() {
+  const seen = SESSION.decisions.slice(0, iDec);
+  const esc = t => String(t).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+  const spans = [];
+  for (const d of seen) {
+    if (d.signal_name !== "current_phase" || !d.visible) continue;
+    const v = String(d.value);
+    if (spans.length && spans[spans.length - 1].phase === v) continue;
+    if (spans.length) spans[spans.length - 1].end = d.window_end_ms;
+    spans.push({ phase: v, start: d.window_end_ms, end: t });
+  }
+  if (spans.length) spans[spans.length - 1].end = t;
+  const totals = new Map();
+  for (const sp of spans)
+    totals.set(sp.phase, (totals.get(sp.phase) || 0) + (sp.end - sp.start));
+
+  let words = { candidate: 0, interviewer: 0 };
+  for (const c of SESSION.transcript) {
+    if (c.offset_ms > t) break;
+    words[c.speaker] = (words[c.speaker] || 0) + Math.max(1000, c.text.split(/\s+/).length / 2.5 * 1000);
+  }
+  const spoken = (words.candidate + words.interviewer) || 1;
+
+  const cards = seen.filter(d => d.visible && d.signal_name !== "current_phase");
+  const calls = new Map();
+  for (const d of seen) calls.set(d.window_end_ms, d.in_tokens);
+  let cents = 0;
+  for (const tok of calls.values()) cents += (tok || 0) * CENTS_PER_IN_TOKEN;
+
+  let h = `<h3>Session</h3><table><tr><td>length</td><td class="n">${fmt(t)}</td></tr></table>`;
+
+  h += "<h3>Time per phase</h3><table>";
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  for (const [phase, ms] of sorted) {
+    const share = Math.round(ms / Math.max(1, t) * 100);
+    h += `<tr><td>${esc(phase.replace(/_/g, " "))}<div class="meter">`
+       + `<i style="width:${share}%"></i></div></td>`
+       + `<td class="n">${Math.round(ms / 60000)} min &middot; ${share}%</td></tr>`;
+  }
+  if (!sorted.length) h += "<tr><td>no phase reached the display threshold</td></tr>";
+  h += "</table>";
+
+  const cand = Math.round(words.candidate / spoken * 100);
+  h += `<h3>Talk time</h3><table>`
+     + `<tr><td>candidate<div class="meter"><i style="width:${cand}%"></i></div></td>`
+     + `<td class="n">${cand}%</td></tr>`
+     + `<tr><td>interviewer</td><td class="n">${100 - cand}%</td></tr></table>`;
+
+  h += `<h3>Cards shown (${cards.length})</h3><table>`;
+  for (const c of cards)
+    h += `<tr><td>${esc((LABEL[c.signal_name] || [c.signal_name])[0])}</td>`
+       + `<td class="n">${esc(num(c))} &middot; ${fmt(c.window_end_ms)}</td></tr>`;
+  if (!cards.length) h += "<tr><td>none</td></tr>";
+  h += "</table>";
+
+  h += `<h3>Cost</h3><table><tr><td>${seen.length} judgments, `
+     + `${cards.length + seen.filter(d => d.visible && d.signal_name === "current_phase").length} shown`
+     + `</td><td class="n">${cents.toFixed(2)}&cent;</td></tr></table>`;
+
+  h += `<div class="next"><b>In the real tool, next:</b> <code>mis label</code> within `
+     + `ten minutes while recall is intact, then <code>mis report</code> for topic `
+     + `coverage, which is the one part that needs another model pass.</div>`;
+  return h;
+}
+
+$("stop").addEventListener("click", endSession);
+$("restart").addEventListener("click", () => {
+  reset(); $("summary").classList.remove("on");
+  playing = true; $("play").textContent = "Pause";
+});
 document.querySelectorAll(".sp").forEach(b => b.addEventListener("click", () => {
   speed = +b.dataset.x;
   document.querySelectorAll(".sp").forEach(o => o.setAttribute("aria-pressed", o === b));

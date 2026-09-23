@@ -258,6 +258,11 @@ class SessionStore:
                                (notes, session_id))
             self._conn.commit()
 
+    def chunks(self, session_id: str) -> list[sqlite3.Row]:
+        return list(self._conn.execute(
+            "SELECT * FROM transcript_chunks WHERE session_id=? ORDER BY idx",
+            (session_id,)))
+
     def decisions(self, session_id: str, *, visible_only: bool = False) -> list[sqlite3.Row]:
         sql = "SELECT * FROM signal_decisions WHERE session_id = ?"
         if visible_only:

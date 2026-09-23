@@ -51,6 +51,22 @@
      recording when you are not is the one failure that loses a whole session. */
   body.standby #clock, body.paused #clock { color:var(--warn); }
   body.standby header, body.paused header { box-shadow:inset 0 2px 0 var(--warn); }
+  /* Shown on Stop. Facts only, no model call, so it appears instantly. */
+  #summary { display:none; padding:16px 18px; overflow-y:auto; }
+  body.stopped #summary { display:block; }
+  body.stopped main { display:none; }
+  #summary h3 { font-size:12px; letter-spacing:.07em; text-transform:uppercase;
+                color:var(--dim); margin:18px 0 8px; font-weight:600; }
+  #summary h3:first-child { margin-top:0; }
+  #summary .big { font-size:19px; font-weight:600; }
+  #summary table { width:100%; border-collapse:collapse; font-size:13px; }
+  #summary td { padding:3px 0; }
+  #summary td.n { text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
+  #summary .bar { height:4px; background:var(--line); border-radius:2px; margin-top:3px; }
+  #summary .bar > i { display:block; height:100%; background:var(--cool); border-radius:2px; }
+  #summary .next { margin-top:20px; padding:11px 13px; border:1px solid var(--line);
+                   border-radius:6px; font-size:13px; }
+  #summary code { font-family:ui-monospace,monospace; color:var(--cool); }
   #modeTag { font-size:11.5px; letter-spacing:.06em; text-transform:uppercase;
              color:var(--warn); }
   body.running #modeTag, body.stopped #modeTag { display:none; }
@@ -67,6 +83,8 @@
     <button id="bStop" disabled>Stop</button>
   </div>
 </header>
+
+<div id="summary"></div>
 
 <main>
   <section>
@@ -117,9 +135,50 @@ function setMode(m) {
   $("bStart").disabled = (m === "running" || m === "stopped");
   $("bPause").disabled = (m !== "running");
   $("bStop").disabled  = (m === "stopped" || m === "standby");
-  if (m === "stopped") $("quiet").textContent =
-    "Session ended. Run  mis label  to record what was useful.";
+  if (m === "stopped") loadSummary();
 }
+async function loadSummary() {
+  const box = $("summary");
+  box.innerHTML = "<p>Gathering…</p>";
+  try {
+    const d = await (await fetch("/summary")).json();
+    if (d.unavailable) { box.innerHTML = "<p>" + d.unavailable + "</p>"; return; }
+    const esc = t => String(t).replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+    let h = `<h3>Session</h3><div class="big">${esc(d.duration)}</div>`;
+
+    h += "<h3>Time per phase</h3><table>";
+    for (const p of d.phases)
+      h += `<tr><td>${esc(p.phase)}<div class="bar"><i style="width:${p.share}%"></i></div></td>`
+         + `<td class="n">${p.minutes} min &middot; ${p.share}%</td></tr>`;
+    if (!d.phases.length) h += "<tr><td>no phase ever reached the display threshold</td></tr>";
+    h += "</table>";
+
+    h += `<h3>Talk time</h3><table><tr><td>candidate<div class="bar">`
+       + `<i style="width:${d.talk.candidate}%"></i></div></td>`
+       + `<td class="n">${d.talk.candidate}%</td></tr>`
+       + `<tr><td>you</td><td class="n">${d.talk.interviewer}%</td></tr></table>`;
+
+    h += `<h3>Cards shown (${d.cards.length})</h3><table>`;
+    for (const c of d.cards)
+      h += `<tr><td>${esc(c.signal.replace(/_/g," "))}</td>`
+         + `<td class="n">${esc(c.value)} &middot; ${esc(c.at)}</td></tr>`;
+    if (!d.cards.length) h += "<tr><td>none</td></tr>";
+    h += "</table>";
+
+    h += `<h3>Cost</h3><table><tr><td>${d.judgments} judgments, ${d.shown} shown</td>`
+       + `<td class="n">$${d.cost_usd.toFixed(4)}</td></tr></table>`;
+
+    // Labelling first: the report costs a call, and recall decays fastest.
+    h += `<div class="next"><b>Next, within ten minutes</b><br>`
+       + `<code>mis label</code> while you still remember, then `
+       + `<code>mis report</code> for topic coverage.</div>`;
+    box.innerHTML = h;
+  } catch (e) {
+    box.innerHTML = "<p>Could not load the summary: " + e + "</p>";
+  }
+}
+
 const post = p => fetch(p, {method:"POST"}).then(r => r.json())
                    .then(d => setMode(d.mode)).catch(() => {});
 $("bStart").onclick = () => post("/start");

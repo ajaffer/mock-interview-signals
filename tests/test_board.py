@@ -462,3 +462,42 @@ def test_trace_filename_sorts_by_time_and_names_its_session(tmp_path):
     t = Trace.for_session("abc123def456", tmp_path)
     assert t.path.name.endswith("-abc123def456.jsonl")
     assert t.path.name[:4].isdigit(), "leads with the year so files sort by time"
+
+
+# -- end-of-session summary ----------------------------------------------
+
+def test_summary_reports_the_facts_without_a_model_call(tmp_path):
+    """Everything here is arithmetic over what was already recorded."""
+    from mis.models import Session, SourceType, Speaker, TranscriptChunk
+    from mis.store import SessionStore
+    from mis.summary import build
+
+    store = SessionStore(tmp_path / "s.db")
+    store.save_session(Session(id="s1", source_type=SourceType.LIVE, source_ref="live"))
+    store.save_chunks("s1", [
+        TranscriptChunk(index=0, offset_ms=0, speaker=Speaker.INTERVIEWER,
+                        text="shall we start"),
+        TranscriptChunk(index=1, offset_ms=60_000, speaker=Speaker.CANDIDATE,
+                        text=" ".join(["word"] * 200)),
+    ])
+
+    out = build(store, "s1")
+    assert out["duration"] == "1:00"
+    # The candidate said far more, so the split must reflect that.
+    assert out["talk"]["candidate"] > out["talk"]["interviewer"]
+    assert out["cards"] == []
+    assert out["cost_usd"] == 0.0
+    store.close()
+
+
+def test_summary_survives_a_session_that_never_ticked(tmp_path):
+    from mis.models import Session, SourceType
+    from mis.store import SessionStore
+    from mis.summary import build
+
+    store = SessionStore(tmp_path / "s.db")
+    store.save_session(Session(id="empty", source_type=SourceType.LIVE, source_ref="live"))
+    out = build(store, "empty")
+    assert out["duration"] == "0:00"
+    assert out["phases"] == [] and out["cards"] == []
+    store.close()
