@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from mis.board import BoardError, load_excalidraw
+from cue.board import BoardError, load_excalidraw
 
 
 def _shape(eid, x, y, w, h, kind="rectangle", **kw):
@@ -174,8 +174,8 @@ def test_rejects_invalid_json(tmp_path):
 
 def test_peer_swap_inverts_which_stream_is_which():
     """The second half of a peer swap records the operator as the candidate."""
-    from mis.live.capture import DualCapture
-    from mis.models import Speaker
+    from cue.live.capture import DualCapture
+    from cue.models import Speaker
 
     default = DualCapture(mic_device=0, system_device=1)
     assert [s.speaker for s in default.streams] == [
@@ -212,7 +212,7 @@ class _FakeClient:
 
 
 def _scene(components, relationships, notes=()):
-    from mis.board_vision import _Component, _Relationship, _Scene
+    from cue.board_vision import _Component, _Relationship, _Scene
 
     return _Scene(
         components=[_Component(label=lbl, shape=shape) for lbl, shape in components],
@@ -223,7 +223,7 @@ def _scene(components, relationships, notes=()):
 
 
 def test_screenshot_becomes_the_same_board_state(tmp_path):
-    from mis.board_vision import load_image
+    from cue.board_vision import load_image
 
     png = tmp_path / "shot.png"
     png.write_bytes(b"\x89PNG\r\n\x1a\n fake")
@@ -246,7 +246,7 @@ def test_screenshot_becomes_the_same_board_state(tmp_path):
 def test_screenshot_sends_the_image_as_base64(tmp_path):
     import base64
 
-    from mis.board_vision import load_image
+    from cue.board_vision import load_image
 
     png = tmp_path / "shot.png"
     png.write_bytes(b"\x89PNG bytes")
@@ -260,7 +260,7 @@ def test_screenshot_sends_the_image_as_base64(tmp_path):
 
 
 def test_loose_arrow_end_survives_transcription(tmp_path):
-    from mis.board_vision import load_image
+    from cue.board_vision import load_image
 
     png = tmp_path / "shot.png"
     png.write_bytes(b"x")
@@ -271,7 +271,7 @@ def test_loose_arrow_end_survives_transcription(tmp_path):
 
 
 def test_unsupported_image_type_is_refused(tmp_path):
-    from mis.board_vision import VisionError, load_image
+    from cue.board_vision import VisionError, load_image
 
     bad = tmp_path / "board.tiff"
     bad.write_bytes(b"x")
@@ -280,7 +280,7 @@ def test_unsupported_image_type_is_refused(tmp_path):
 
 
 def test_load_board_dispatches_on_suffix(tmp_path):
-    from mis.board import load_board
+    from cue.board import load_board
 
     scene = tmp_path / "b.excalidraw"
     scene.write_text(json.dumps({"elements": [
@@ -295,14 +295,14 @@ def test_load_board_dispatches_on_suffix(tmp_path):
 # -- transport controls ---------------------------------------------------
 
 def _session():
-    from mis.jev.fake import FakeJevAdapter
-    from mis.live.session import LiveSession
+    from cue.jev.fake import FakeJevAdapter
+    from cue.live.session import LiveSession
     return LiveSession(adapter=FakeJevAdapter(), tick_ms=20_000)
 
 
 def test_standby_discards_audio_until_started():
     """Launching early is in the runbook; that small talk is not the interview."""
-    from mis.models import Speaker
+    from cue.models import Speaker
 
     s = _session()
     assert s.mode == "standby"
@@ -313,7 +313,7 @@ def test_standby_discards_audio_until_started():
 
 
 def test_start_zeroes_the_clock_at_the_moment_you_press_it():
-    from mis.models import Speaker
+    from cue.models import Speaker
 
     s = _session()
     s.advance(90_000)          # 90s of pre-interview idling
@@ -323,7 +323,7 @@ def test_start_zeroes_the_clock_at_the_moment_you_press_it():
 
 
 def test_paused_time_is_not_interview_time():
-    from mis.models import Speaker
+    from cue.models import Speaker
 
     s = _session()
     s.advance(0)
@@ -373,13 +373,13 @@ class _FakeTSClient:
 
 
 def _answered_spec():
-    from mis.signals import SIGNAL_SET
+    from cue.signals import SIGNAL_SET
     return [s for s in SIGNAL_SET if s.name == "answered_question"]
 
 
 def test_trace_records_both_directions(tmp_path):
-    from mis.jev.typesafe import TypeSafeJevAdapter
-    from mis.trace import Trace
+    from cue.jev.typesafe import TypeSafeJevAdapter
+    from cue.trace import Trace
 
     t = Trace(tmp_path / "s.jsonl")
     a = TypeSafeJevAdapter(client=_FakeTSClient(), trace=t)
@@ -400,13 +400,13 @@ def test_trace_records_both_directions(tmp_path):
 
 def test_trace_records_failures_too(tmp_path):
     """The call you most want logged is the one that broke."""
-    from mis.jev.typesafe import TypeSafeJevAdapter
+    from cue.jev.typesafe import TypeSafeJevAdapter
 
     class Boom:
         def system_one(self, *a, **k):
             raise RuntimeError("upstream exploded")
 
-    from mis.trace import Trace
+    from cue.trace import Trace
 
     t = Trace(tmp_path / "s.jsonl")
     a = TypeSafeJevAdapter(client=Boom(), trace=t)
@@ -420,7 +420,7 @@ def test_trace_records_failures_too(tmp_path):
 
 
 def test_no_trace_file_unless_asked(tmp_path):
-    from mis.jev.typesafe import TypeSafeJevAdapter
+    from cue.jev.typesafe import TypeSafeJevAdapter
 
     a = TypeSafeJevAdapter(client=_FakeTSClient())
     a.evaluate({}, _answered_spec(), window_start_ms=0, window_end_ms=1)
@@ -429,10 +429,10 @@ def test_no_trace_file_unless_asked(tmp_path):
 
 def test_one_file_tells_the_whole_session(tmp_path):
     """Lifecycle and Jev calls land in the same file, in order."""
-    from mis.jev.fake import FakeJevAdapter
-    from mis.live.session import LiveSession
-    from mis.models import Speaker
-    from mis.trace import Trace
+    from cue.jev.fake import FakeJevAdapter
+    from cue.live.session import LiveSession
+    from cue.models import Speaker
+    from cue.trace import Trace
 
     t = Trace(tmp_path / "sess.jsonl")
     s = LiveSession(adapter=FakeJevAdapter(), tick_ms=20_000, trace=t)
@@ -457,7 +457,7 @@ def test_one_file_tells_the_whole_session(tmp_path):
 
 
 def test_trace_filename_sorts_by_time_and_names_its_session(tmp_path):
-    from mis.trace import Trace
+    from cue.trace import Trace
 
     t = Trace.for_session("abc123def456", tmp_path)
     assert t.path.name.endswith("-abc123def456.jsonl")
@@ -468,9 +468,9 @@ def test_trace_filename_sorts_by_time_and_names_its_session(tmp_path):
 
 def test_summary_reports_the_facts_without_a_model_call(tmp_path):
     """Everything here is arithmetic over what was already recorded."""
-    from mis.models import Session, SourceType, Speaker, TranscriptChunk
-    from mis.store import SessionStore
-    from mis.summary import build
+    from cue.models import Session, SourceType, Speaker, TranscriptChunk
+    from cue.store import SessionStore
+    from cue.summary import build
 
     store = SessionStore(tmp_path / "s.db")
     store.save_session(Session(id="s1", source_type=SourceType.LIVE, source_ref="live"))
@@ -491,9 +491,9 @@ def test_summary_reports_the_facts_without_a_model_call(tmp_path):
 
 
 def test_summary_survives_a_session_that_never_ticked(tmp_path):
-    from mis.models import Session, SourceType
-    from mis.store import SessionStore
-    from mis.summary import build
+    from cue.models import Session, SourceType
+    from cue.store import SessionStore
+    from cue.summary import build
 
     store = SessionStore(tmp_path / "s.db")
     store.save_session(Session(id="empty", source_type=SourceType.LIVE, source_ref="live"))

@@ -4,12 +4,12 @@ Shown in the strip when Stop is pressed. Everything here is arithmetic over
 what was already recorded: phase durations, talk split, which cards fired. No
 model call, so it appears instantly and costs nothing.
 
-Deliberately not the evidence pack. `mis report` adds topic coverage, which is
+Deliberately not the evidence pack. `cue report` adds topic coverage, which is
 the one genuinely judgemental part and needs a Jev pass over the whole
 transcript. That belongs in a considered read afterwards, not in a panel you
 glance at while the candidate is still saying goodbye.
 
-The ordering matters for a different reason too: the runbook asks for `mis
+The ordering matters for a different reason too: the runbook asks for `cue
 label` within ten minutes, while recall is intact. This panel is what you see
 first, so it ends by pointing there rather than at the report.
 """

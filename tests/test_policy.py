@@ -3,8 +3,8 @@ the densest tests. Each one encodes a rule from docs/phase-0-signal-spec.md."""
 
 from __future__ import annotations
 
-from mis.models import Phase
-from mis.policy import MAX_VISIBLE, SignalPolicy
+from cue.models import Phase
+from cue.policy import MAX_VISIBLE, SignalPolicy
 
 
 def test_noul_mid_band_is_hidden(noul):

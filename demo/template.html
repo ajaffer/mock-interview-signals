@@ -420,8 +420,8 @@ function renderSummary() {
      + `${cards.length + seen.filter(d => d.visible && d.signal_name === "current_phase").length} shown`
      + `</td><td class="n">${cents.toFixed(2)}&cent;</td></tr></table>`;
 
-  h += `<div class="next"><b>In the real tool, next:</b> <code>mis label</code> within `
-     + `ten minutes while recall is intact, then <code>mis report</code> for topic `
+  h += `<div class="next"><b>In the real tool, next:</b> <code>cue label</code> within `
+     + `ten minutes while recall is intact, then <code>cue report</code> for topic `
      + `coverage, which is the one part that needs another model pass.</div>`;
   return h;
 }

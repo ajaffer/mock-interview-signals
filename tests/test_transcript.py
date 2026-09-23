@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from mis.models import Speaker
-from mis.transcript import TranscriptError, load_jsonl, to_chunks
+from cue.models import Speaker
+from cue.transcript import TranscriptError, load_jsonl, to_chunks
 
 GOOD = """{"_meta": {"id": "t1", "interview_type": "system_design"}}
 {"t_ms": 0, "speaker": "Interviewer", "text": "Design a URL shortener."}

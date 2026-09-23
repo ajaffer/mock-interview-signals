@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from mis.models import Primitive, SignalDecision
+from cue.models import Primitive, SignalDecision
 
 
 @pytest.fixture

@@ -42,9 +42,9 @@ These change what the data says, so they are fixed too:
 
 - Press Start when the interview starts, not when the app launches
 - Pause for breaks and while they draw
-- `mis label` straight after, while I still remember
+- `cue label` straight after, while I still remember
 
-The questions are fixed in `src/mis/label.py`. Do not reword them mid-run.
+The questions are fixed in `src/cue/label.py`. Do not reword them mid-run.
 
 Consent and which platforms I may run on are in the runbook. They apply whether or
 not a gate is running.

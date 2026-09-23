@@ -16,8 +16,8 @@ those changes nothing about what the model receives.
 
 from __future__ import annotations
 
-from mis.models import SIGNAL_SET_VERSION
-from mis.signals import SIGNAL_SET, fingerprint
+from cue.models import SIGNAL_SET_VERSION
+from cue.signals import SIGNAL_SET, fingerprint
 
 EXPECTED_VERSION = "v0.3"
 EXPECTED_FINGERPRINT = "e37c084f88225eeb"
@@ -58,7 +58,7 @@ def test_every_spec_is_complete_enough_to_send():
 
 def test_the_gates_and_window_are_pinned_too():
     """A threshold change alters the data collected as surely as a reword does."""
-    import mis.signals as signals
+    import cue.signals as signals
 
     assert signals.COLD_START_MS == 60_000
     assert signals.FAIR_CHANCE_MS == 20_000

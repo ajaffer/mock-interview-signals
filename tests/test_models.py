@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mis.models import Primitive, SignalDecision, Speaker, TranscriptChunk
+from cue.models import Primitive, SignalDecision, Speaker, TranscriptChunk
 
 
 def test_noul_rejects_a_confidence_value():
@@ -65,8 +65,8 @@ def test_question_detection(text, expected):
 def test_score_distribution_keys_are_coerced_to_strings():
     """Jev keys Score distributions by integer level index; Choice by option
     name. One field has to hold both, so keys are normalized at the boundary."""
-    from mis.jev.adapter import build_decision
-    from mis.signals import CLARITY
+    from cue.jev.adapter import build_decision
+    from cue.signals import CLARITY
 
     d = build_decision(
         CLARITY,

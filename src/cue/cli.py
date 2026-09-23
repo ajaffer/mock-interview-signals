@@ -66,7 +66,7 @@ def _sessions(args) -> int:
 
     if not args.db.exists():
         print(f"{args.db} does not exist. Sessions record automatically when you run "
-              f"'mis live'.", file=sys.stderr)
+              f"'cue live'.", file=sys.stderr)
         return 2
 
     store = SessionStore(args.db)
@@ -92,7 +92,7 @@ def _sessions(args) -> int:
             print(f"{r['id']:<14}{when:<18}{r['source_type']:<9}{length:>8}"
                   f"{r['shown']:>7}{'yes' if r['has_report'] else '-':>8}  "
                   f"{r['notes'] or ''}")
-        print(f"\n{len(rows)} session(s). 'mis report <id>' for an evidence pack.")
+        print(f"\n{len(rows)} session(s). 'cue report <id>' for an evidence pack.")
         return 0
     finally:
         store.close()
@@ -108,7 +108,7 @@ def _signals(args) -> int:
     from .signals import SIGNAL_SET, fingerprint
 
     print(f"signal set {SIGNAL_SET_VERSION}   fingerprint {fingerprint()}")
-    print("defined in src/mis/signals.py, pinned by tests/test_signals_pinned.py\n")
+    print("defined in src/cue/signals.py, pinned by tests/test_signals_pinned.py\n")
 
     for spec in SIGNAL_SET:
         print("=" * 78)
@@ -164,7 +164,7 @@ def _traces(args) -> int:
             path.unlink()
         print(f"Deleted {len(rows)} trace(s).")
     else:
-        print("'mis traces --purge' deletes them all.")
+        print("'cue traces --purge' deletes them all.")
     return 0
 
 
@@ -184,7 +184,7 @@ def _gate(args) -> int:
         rows = store.gate_rows()
         counted = [r for r in rows if not r["excluded"]]
         if not rows:
-            print("No labelled sessions yet. Run 'mis label' after your next one.")
+            print("No labelled sessions yet. Run 'cue label' after your next one.")
             return 0
 
         print(f"{'session':<14}{'cards':>7}{'new':>6}{'cost':>9}  notes")
@@ -255,7 +255,7 @@ def _live(args) -> int:
         from .live.transcribe import Transcriber
 
         if args.mic is None:
-            print("--mic is required. Run: mis devices", file=sys.stderr)
+            print("--mic is required. Run: cue devices", file=sys.stderr)
             return 2
         try:
             mic = resolve_device(args.mic)
@@ -292,7 +292,7 @@ def _live(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="mis", description="Mock interview signal replay")
+    parser = argparse.ArgumentParser(prog="cue", description="Mock interview signal replay")
     sub = parser.add_subparsers(dest="command", required=True)
 
     rp = sub.add_parser("replay", help="Replay a JSONL transcript")
@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  [{idx}]  {name}")
             print("\nYour microphone is the interviewer. System audio (BlackHole) is the")
             print("candidate. Pass devices by NAME -- indexes shift when devices change.")
-            print("Run 'mis devices --check' to see which ones are actually receiving audio.")
+            print("Run 'cue devices --check' to see which ones are actually receiving audio.")
             return 0
 
         print("Listening to each device for 3s. Play audio through your call or a")
@@ -453,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if not args.db.exists():
             print(f"{args.db} does not exist. Sessions record automatically when you "
-                  f"run 'mis live'.", file=sys.stderr)
+                  f"run 'cue live'.", file=sys.stderr)
             return 2
 
         sid = resolve_session_id(str(args.db), args.session)

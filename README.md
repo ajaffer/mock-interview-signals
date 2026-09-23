@@ -26,7 +26,7 @@ Stated up front because it is the part most likely to be overclaimed.
 
 A usefulness gate on 2026-09-20 **failed**, not because a signal was wrong, but because
 it was right about something the interviewer had already noticed. Accuracy is not
-usefulness, and the gate is written to measure the second. `mis label` and `mis gate`
+usefulness, and the gate is written to measure the second. `cue label` and `cue gate`
 exist to settle it with data rather than recollection.
 
 Measured on a real 10-minute session: 119 judgments, 8 shown (**93% suppressed**), 81 of
@@ -37,7 +37,7 @@ median per batched call.
 
 ```bash
 python3 -m venv .venv && ./.venv/bin/pip install -e ".[dev]"
-./.venv/bin/mis replay transcripts/fixtures/sample-001-url-shortener.jsonl
+./.venv/bin/cue replay transcripts/fixtures/sample-001-url-shortener.jsonl
 ```
 
 That runs against a **fake adapter**, keyword heuristics that exercise the pipeline
@@ -49,7 +49,7 @@ For real judgments:
 ```bash
 ./.venv/bin/pip install -e ".[jev]"
 export TYPESAFE_API_KEY=...
-./.venv/bin/mis replay <transcript.jsonl> --adapter typesafe --db sessions.db
+./.venv/bin/cue replay <transcript.jsonl> --adapter typesafe --db sessions.db
 ```
 
 Useful flags: `--show-suppressed` (see what was hidden and why), `--db` (persist a session
@@ -58,17 +58,17 @@ log), `--json` (export it), `--tick-ms` (evaluation cadence).
 Live, against a real interview:
 
 ```bash
-./.venv/bin/mis live --mic <name> --system <name>   # add --my-role candidate in a peer swap
-./.venv/bin/mis label                               # afterwards: what was actually useful
-./.venv/bin/mis gate                                # where that leaves the usefulness gate
+./.venv/bin/cue live --mic <name> --system <name>   # add --my-role candidate in a peer swap
+./.venv/bin/cue label                               # afterwards: what was actually useful
+./.venv/bin/cue gate                                # where that leaves the usefulness gate
 ```
 
-`mis report --board board.excalidraw` adds whiteboard analysis to the evidence pack.
+`cue report --board board.excalidraw` adds whiteboard analysis to the evidence pack.
 
 To see exactly what is sent to Jev and what comes back, add `--trace`. It writes one
 file per session under `traces/`, recording start, pause, resume and stop alongside
 every request and response with latency, tokens and cost. Traces contain transcript
-text, so they are gitignored; `mis traces` lists them and `mis traces --purge` deletes
+text, so they are gitignored; `cue traces` lists them and `cue traces --purge` deletes
 them.
 
 ## How it fits together
@@ -118,8 +118,8 @@ nothing varies them; every tick sends the same wording and only the transcript w
 underneath changes.
 
 ```bash
-./.venv/bin/mis signals          # all five, as sent
-./.venv/bin/mis signals --full   # with complete criteria
+./.venv/bin/cue signals          # all five, as sent
+./.venv/bin/cue signals --full   # with complete criteria
 ```
 
 They are deliberately **not** configuration. Every stored decision is stamped with

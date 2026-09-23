@@ -15,7 +15,7 @@ they sort by time and identify their session:
 
     traces/2026-09-23T0034-19523cf98099.jsonl
 
-Delete them when you no longer need them. `mis traces --purge` does it, and
+Delete them when you no longer need them. `cue traces --purge` does it, and
 nothing in the product reads a trace back; it exists for you to read.
 """
 

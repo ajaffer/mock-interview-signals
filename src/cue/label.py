@@ -147,7 +147,7 @@ def run(db: Path, session_id: str | None) -> int:
         print("─" * 72)
         print(f"\n{new}/{len(labels)} cards told you something new. "
               f"Attention cost: {cost}.")
-        print("Run 'mis gate' to see where this leaves the gate.")
+        print("Run 'cue gate' to see where this leaves the gate.")
         return 0
     finally:
         store.close()

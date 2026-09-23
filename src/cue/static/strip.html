@@ -171,8 +171,8 @@ async function loadSummary() {
 
     // Labelling first: the report costs a call, and recall decays fastest.
     h += `<div class="next"><b>Next, within ten minutes</b><br>`
-       + `<code>mis label</code> while you still remember, then `
-       + `<code>mis report</code> for topic coverage.</div>`;
+       + `<code>cue label</code> while you still remember, then `
+       + `<code>cue report</code> for topic coverage.</div>`;
     box.innerHTML = h;
   } catch (e) {
     box.innerHTML = "<p>Could not load the summary: " + e + "</p>";

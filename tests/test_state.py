@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from mis.models import Phase, Speaker, TranscriptChunk
-from mis.state import QUESTION_RETAIN_MS, WINDOW_MS, RollingState
+from cue.models import Phase, Speaker, TranscriptChunk
+from cue.state import QUESTION_RETAIN_MS, WINDOW_MS, RollingState
 
 
 def _chunk(i, ms, speaker, text):

@@ -11,12 +11,12 @@ from pathlib import Path
 
 import pytest
 
-from mis.jev.fake import FakeJevAdapter
-from mis.models import Primitive
-from mis.replay import replay
-from mis.signals import BY_NAME, SIGNAL_SET
-from mis.state import RollingState
-from mis.store import SessionStore
+from cue.jev.fake import FakeJevAdapter
+from cue.models import Primitive
+from cue.replay import replay
+from cue.signals import BY_NAME, SIGNAL_SET
+from cue.state import RollingState
+from cue.store import SessionStore
 
 TURNS = [
     (0, "interviewer", "Design a URL shortener for me."),
@@ -97,7 +97,7 @@ def test_cold_start_blocks_phase_before_60s():
 def test_tradeoff_is_not_asked_during_requirements():
     """tradeoff_coverage is cut from SIGNAL_SET in v0.2, so it is referenced
     directly here. The gate is still covered for anyone re-testing the signal."""
-    from mis.signals import TRADEOFF_COVERAGE
+    from cue.signals import TRADEOFF_COVERAGE
 
     assert TRADEOFF_COVERAGE.name not in BY_NAME, "cut signals stay out of the active set"
     assert TRADEOFF_COVERAGE.should_ask(RollingState()) == "phase_not_reached"
@@ -149,8 +149,8 @@ def test_store_accepts_writes_from_another_thread(tmp_path):
     import queue as _queue
     import threading
 
-    from mis.models import Session, Speaker, TranscriptChunk
-    from mis.store import SessionStore
+    from cue.models import Session, Speaker, TranscriptChunk
+    from cue.store import SessionStore
 
     store = SessionStore(tmp_path / "s.db")
     store.save_session(Session(id="t1"))

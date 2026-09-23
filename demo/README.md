@@ -16,7 +16,7 @@ Two commands. The first produces a session with real Jev decisions; the second r
 
 ```bash
 # 1. Replay a transcript through real Jev into a throwaway database.
-./.venv/bin/mis replay transcripts/fixtures/sample-001-url-shortener.jsonl \
+./.venv/bin/cue replay transcripts/fixtures/sample-001-url-shortener.jsonl \
   --adapter typesafe --db /tmp/demo.db --tick-ms 15000
 
 # 2. Render that session into demo/index.html (session id is printed by step 1;

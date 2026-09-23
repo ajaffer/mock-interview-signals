@@ -13,7 +13,7 @@ vision = ["anthropic"]
 dev = ["pytest>=8", "ruff>=0.5"]
 
 [project.scripts]
-mis = "mis.cli:main"
+cue = "cue.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
