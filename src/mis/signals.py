@@ -19,7 +19,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from .models import Phase, Primitive
-from .state import RollingState
+from .state import QUESTION_RETAIN_MS, WINDOW_MS, RollingState
 
 Precondition = Callable[[RollingState], str | None]
 
@@ -53,10 +53,16 @@ def _phase_precondition(state: RollingState) -> str | None:
 
 
 def _answered_precondition(state: RollingState) -> str | None:
-    """A question is open, and the candidate has had 20 seconds to start on it."""
+    """The last interviewer question is between 20 and 120 seconds old.
+
+    Not "still open": nothing tracks whether it was answered. The question is
+    simply the most recent one the interviewer asked, and it ages out on a
+    timer rather than on being addressed. So for up to two minutes after any
+    question, this gate passes regardless of what has happened since.
+    """
     elapsed = state.ms_since_interviewer_question
     if elapsed is None:
-        return "no_outstanding_question"
+        return "no_recent_question"
     if elapsed < FAIR_CHANCE_MS:
         return "fair_chance_window"
     return None
@@ -236,6 +242,19 @@ ANSWER_DEPTH = SignalSpec(
     precondition=_answered_precondition,
 )
 
+#: Everything that changes what Jev is shown or when it is asked. Named
+#: explicitly rather than hashing source, so a comment or a docstring edit does
+#: not trip the pin while a threshold change does.
+_BEHAVIOURAL_CONSTANTS = {
+    "COLD_START_MS": COLD_START_MS,
+    "FAIR_CHANCE_MS": FAIR_CHANCE_MS,
+    "MIN_CANDIDATE_SPEECH_MS": MIN_CANDIDATE_SPEECH_MS,
+    "MIN_CONTINUOUS_MS": MIN_CONTINUOUS_MS,
+    "QUESTION_RETAIN_MS": QUESTION_RETAIN_MS,
+    "WINDOW_MS": WINDOW_MS,
+}
+
+
 def fingerprint(specs: Sequence[SignalSpec] = ()) -> str:
     """A hash of every word sent to Jev.
 
@@ -250,6 +269,11 @@ def fingerprint(specs: Sequence[SignalSpec] = ()) -> str:
     should be a deliberate act with a version attached.
     """
     h = hashlib.sha256()
+    # The gates decide which ticks produce a judgment at all, and the window
+    # decides how much transcript each one sees. Moving either changes the data
+    # collected just as surely as rewording a question does, so both are pinned.
+    for name, value in sorted(_BEHAVIOURAL_CONSTANTS.items()):
+        h.update(f"{name}={value}".encode())
     for spec in (specs or SIGNAL_SET):
         h.update(spec.name.encode())
         h.update(spec.primitive.value.encode())
