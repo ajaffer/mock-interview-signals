@@ -106,6 +106,30 @@ of the batch entirely rather than asked and discarded.
 the other answers "should a person see it". A correct signal shown at the wrong moment is
 still bad behavior. Do not merge them.
 
+## Operating notes
+
+The signals are the easy part. Running this during a real interview, where someone's
+time and money are on the line, needs a few rules that are not in the code.
+
+**Nothing here is load-bearing.** If it breaks mid-interview, close the tab and keep
+interviewing. The tool is not in the loop and nothing depends on it.
+
+**Glance at it in pauses only.** While they are drawing, while they are thinking. Never
+mid-answer. Attention spent on the strip is attention taken from the person being
+interviewed.
+
+**When a signal fires, do not act on it immediately.** Ask first whether you had already
+noticed. That question is the whole experiment, and so far the answer is usually yes.
+
+**If it distracts you even once, close it.** A signal that is accurate and distracting is
+still a failure. The interview is real and the candidate's time is worth more than the
+data.
+
+**Tell them it is running**, before it is running, in one sentence.
+
+That fourth rule is why this project has a usefulness gate rather than an accuracy
+benchmark. Being right is not the bar.
+
 ## Transcripts
 
 `transcripts/fixtures/` holds synthetic transcripts and is tracked. `transcripts/private/`
