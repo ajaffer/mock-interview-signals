@@ -12,7 +12,7 @@ asking** and **which answers are worth a person's attention while they are busy*
 This system asks five fixed questions every twenty seconds. Measured on a real
 ten-minute session:
 
-| | |
+| Measure | Session |
 |---|---|
 | Questions that could have been asked | 200 |
 | Never sent, blocked by a precondition | **81** (40%) |
@@ -49,7 +49,7 @@ flowchart TD
     TAB["tab / system audio<br/><i>candidate</i>"] --> TR
     TR["transcribe locally<br/><b>audio stops here</b>"] --> RS
 
-    RS["<b>RollingState</b><br/>all chunks, 180s window,<br/>durations, open question"]
+    RS["<b>RollingState</b><br/>all chunks, 180s window,<br/>durations, last question"]
     RS -->|every 20s| PRE
 
     PRE{"<b>Preconditions</b><br/>one per signal, pure arithmetic"}
@@ -194,7 +194,7 @@ Not all signals interrupt, and the distinction turned out to matter:
 
 | | Phase banner | Cards |
 |---|---|---|
-| Where | header, always visible | appear and age out after 75s |
+| Where it lives | header, always visible | appear and age out after 75s |
 | Attention cost | near zero | an interruption |
 | Evidence | holds up across sessions | unproven |
 
