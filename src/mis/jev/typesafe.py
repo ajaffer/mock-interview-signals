@@ -8,11 +8,8 @@ being re-sent once per signal.
 
 from __future__ import annotations
 
-import json
 import time
 from collections.abc import Sequence
-from datetime import UTC, datetime
-from pathlib import Path
 
 from ..models import Primitive, SignalDecision
 from ..signals import SignalSpec
@@ -30,19 +27,19 @@ class TypeSafeJevAdapter:
     """Thin wrapper over `client.system_one`. Requires TYPESAFE_API_KEY."""
 
     def __init__(self, client: object | None = None,
-                 trace_path: str | Path | None = None) -> None:
-        """`trace_path` appends one JSON line per call: what went out, what came
-        back, how long it took and what it cost.
+                 trace: object | None = None) -> None:
+        """`trace` records one line per call: what went out, what came back,
+        how long it took and what it cost.
 
         The session log records normalized decisions, which is the right shape
         for replay and reports but useless when the question is "what did we
         actually ask it". This is the other view, and it belongs here because
         the adapter is the only place that knows Jev's wire shape.
 
-        The trace contains transcript text, so it is written wherever you point
-        it and gitignored by default. Off unless asked for.
+        It is the same Trace the live session writes its start, pause and stop
+        events to, so one file tells the whole story of one interview.
         """
-        self._trace_path = Path(trace_path) if trace_path else None
+        self._t = trace
         if client is None:
             try:
                 from typesafe_sdk import TypeSafeClient
@@ -54,12 +51,9 @@ class TypeSafeJevAdapter:
             client = TypeSafeClient()
         self._client = client
 
-    def _trace(self, record: dict) -> None:
-        if self._trace_path is None:
-            return
-        self._trace_path.parent.mkdir(parents=True, exist_ok=True)
-        with self._trace_path.open("a") as fh:
-            fh.write(json.dumps(record, default=str) + "\n")
+    def _trace(self, kind: str, **fields: object) -> None:
+        if self._t is not None:
+            self._t.event(kind, **fields)
 
     @staticmethod
     def _as_dict(specs: Sequence[SignalSpec]) -> dict:
@@ -133,13 +127,13 @@ class TypeSafeJevAdapter:
             result = self._client.system_one(state, questions)
         except Exception as exc:
             # A failed call is the one you most want in the log.
-            self._trace({
-                "at": datetime.now(UTC).isoformat(),
-                "window_ms": [window_start_ms, window_end_ms],
-                "request": {"state": state, "questions": self._as_dict(specs)},
-                "error": f"{type(exc).__name__}: {exc}",
-                "latency_ms": round((time.perf_counter() - started) * 1000),
-            })
+            self._trace(
+                "jev_error",
+                window_ms=[window_start_ms, window_end_ms],
+                request={"state": state, "questions": self._as_dict(specs)},
+                error=f"{type(exc).__name__}: {exc}",
+                latency_ms=round((time.perf_counter() - started) * 1000),
+            )
             raise
         latency_ms = (time.perf_counter() - started) * 1000
         usage = getattr(result, "usage", None)
@@ -148,17 +142,17 @@ class TypeSafeJevAdapter:
             "request_output_tokens": getattr(usage, "output_tokens", None),
         }
 
-        self._trace({
-            "at": datetime.now(UTC).isoformat(),
-            "window_ms": [window_start_ms, window_end_ms],
-            "latency_ms": round(latency_ms),
-            "model": getattr(result, "model", None),
-            "usage": {k: v for k, v in tokens.items()},
-            "cost_cents": round((tokens.get("request_input_tokens") or 0)
-                                * 0.042 / 1e6 * 100, 5),
-            "request": {"state": state, "questions": self._as_dict(specs)},
-            "response": self._answers(result, specs),
-        })
+        self._trace(
+            "jev_call",
+            window_ms=[window_start_ms, window_end_ms],
+            latency_ms=round(latency_ms),
+            model=getattr(result, "model", None),
+            usage=dict(tokens),
+            cost_cents=round((tokens.get("request_input_tokens") or 0)
+                             * 0.042 / 1e6 * 100, 5),
+            request={"state": state, "questions": self._as_dict(specs)},
+            response=self._answers(result, specs),
+        )
 
         decisions: list[SignalDecision] = []
         for spec in specs:

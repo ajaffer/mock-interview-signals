@@ -379,13 +379,15 @@ def _answered_spec():
 
 def test_trace_records_both_directions(tmp_path):
     from mis.jev.typesafe import TypeSafeJevAdapter
+    from mis.trace import Trace
 
-    path = tmp_path / "jev.trace.jsonl"
-    a = TypeSafeJevAdapter(client=_FakeTSClient(), trace_path=path)
+    t = Trace(tmp_path / "s.jsonl")
+    a = TypeSafeJevAdapter(client=_FakeTSClient(), trace=t)
     a.evaluate({"recent_transcript": [{"speaker": "candidate", "text": "hi"}]},
                _answered_spec(), window_start_ms=0, window_end_ms=20_000)
 
-    rec = json.loads(path.read_text().strip())
+    rec = json.loads(t.path.read_text().strip())
+    assert rec["event"] == "jev_call"
     assert rec["request"]["state"]["recent_transcript"][0]["text"] == "hi"
     assert rec["request"]["questions"]["answered_question"]["type"] == "noul"
     assert "instructions" in rec["request"]["questions"]["answered_question"]
@@ -404,12 +406,15 @@ def test_trace_records_failures_too(tmp_path):
         def system_one(self, *a, **k):
             raise RuntimeError("upstream exploded")
 
-    path = tmp_path / "jev.trace.jsonl"
-    a = TypeSafeJevAdapter(client=Boom(), trace_path=path)
+    from mis.trace import Trace
+
+    t = Trace(tmp_path / "s.jsonl")
+    a = TypeSafeJevAdapter(client=Boom(), trace=t)
     with pytest.raises(RuntimeError):
         a.evaluate({}, _answered_spec(), window_start_ms=0, window_end_ms=1)
 
-    rec = json.loads(path.read_text().strip())
+    rec = json.loads(t.path.read_text().strip())
+    assert rec["event"] == "jev_error"
     assert "upstream exploded" in rec["error"]
     assert "request" in rec
 
@@ -420,3 +425,40 @@ def test_no_trace_file_unless_asked(tmp_path):
     a = TypeSafeJevAdapter(client=_FakeTSClient())
     a.evaluate({}, _answered_spec(), window_start_ms=0, window_end_ms=1)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_one_file_tells_the_whole_session(tmp_path):
+    """Lifecycle and Jev calls land in the same file, in order."""
+    from mis.jev.fake import FakeJevAdapter
+    from mis.live.session import LiveSession
+    from mis.models import Speaker
+    from mis.trace import Trace
+
+    t = Trace(tmp_path / "sess.jsonl")
+    s = LiveSession(adapter=FakeJevAdapter(), tick_ms=20_000, trace=t)
+    s.advance(0)
+    s.start()
+    s.add_utterance(Speaker.CANDIDATE, "so the idea is a queue", 5_000)
+    s.advance(25_000)
+    s.pause()
+    s.advance(40_000)
+    s.start()
+    s.advance(60_000)
+    s.stop()
+
+    events = [json.loads(line)["event"] for line in t.path.read_text().splitlines()]
+    assert events[0] == "session_created"
+    assert "started" in events and "paused" in events and "resumed" in events
+    assert events[-1] == "stopped"
+
+    last = json.loads(t.path.read_text().splitlines()[-1])
+    assert last["paused_ms"] > 0, "the stop record accounts for paused time"
+    assert last["utterances"] == 1
+
+
+def test_trace_filename_sorts_by_time_and_names_its_session(tmp_path):
+    from mis.trace import Trace
+
+    t = Trace.for_session("abc123def456", tmp_path)
+    assert t.path.name.endswith("-abc123def456.jsonl")
+    assert t.path.name[:4].isdigit(), "leads with the year so files sort by time"

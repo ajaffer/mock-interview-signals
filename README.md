@@ -65,6 +65,12 @@ Live, against a real interview:
 
 `mis report --board board.excalidraw` adds whiteboard analysis to the evidence pack.
 
+To see exactly what is sent to Jev and what comes back, add `--trace`. It writes one
+file per session under `traces/`, recording start, pause, resume and stop alongside
+every request and response with latency, tokens and cost. Traces contain transcript
+text, so they are gitignored; `mis traces` lists them and `mis traces --purge` deletes
+them.
+
 ## How it fits together
 
 ```

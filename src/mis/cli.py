@@ -98,6 +98,31 @@ def _sessions(args) -> int:
         store.close()
 
 
+def _traces(args) -> int:
+    """Traces hold transcript text. Listing them is how you remember to delete."""
+    from .trace import listing
+
+    rows = listing(args.dir)
+    if not rows:
+        print("No traces. Run with --trace to record one.")
+        return 0
+
+    total = 0
+    print(f"{'file':<44}{'size':>9}{'jev calls':>11}{'lines':>8}")
+    for path, size, calls, lines in rows:
+        total += size
+        print(f"{path.name:<44}{size // 1024:>7}KB{calls:>11}{lines:>8}")
+    print(f"\n{len(rows)} trace(s), {total // 1024}KB. These contain transcript text.")
+
+    if args.purge:
+        for path, *_ in rows:
+            path.unlink()
+        print(f"Deleted {len(rows)} trace(s).")
+    else:
+        print("'mis traces --purge' deletes them all.")
+    return 0
+
+
 def _gate(args) -> int:
     """Gate v2 standing, two-sided on purpose.
 
@@ -148,25 +173,31 @@ def _gate(args) -> int:
 
 def _live(args) -> int:
     import threading
+    import uuid
 
     import uvicorn
 
     from .live.session import LiveSession, run_from_capture, run_from_transcript
     from .server import create_app
+    from .trace import Trace
+
+    session_id = uuid.uuid4().hex[:12]
+    trace = Trace.for_session(session_id, args.trace_dir) if args.trace else None
+    if trace is not None:
+        print(f"tracing this session to {trace.path}", file=sys.stderr)
 
     if args.adapter == "typesafe":
         from .jev.typesafe import TypeSafeJevAdapter
 
-        adapter = TypeSafeJevAdapter(trace_path=args.trace)
-        if args.trace:
-            print(f"tracing Jev traffic to {args.trace}", file=sys.stderr)
+        adapter = TypeSafeJevAdapter(trace=trace)
     else:
         adapter = FakeJevAdapter()
         print("FAKE adapter: the strip will move, but the judgments are keyword "
               "heuristics, not Jev.", file=sys.stderr)
 
     store = None if args.no_db else SessionStore(args.db)
-    session = LiveSession(adapter=adapter, tick_ms=args.tick_ms, store=store)
+    session = LiveSession(adapter=adapter, tick_ms=args.tick_ms, store=store,
+                          session_id=session_id, trace=trace)
     if store is not None:
         print(f"recording to {args.db} as session {session.session_id}", file=sys.stderr)
 
@@ -224,8 +255,10 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--db", type=Path, default=None, help="SQLite session log path")
     rp.add_argument("--tick-ms", type=int, default=15_000)
     rp.add_argument("--show-suppressed", action="store_true")
-    rp.add_argument("--trace", type=Path, default=None,
-                    help="Append every Jev request and response to this JSONL file")
+    rp.add_argument("--trace", action="store_true",
+                    help="Write a per-session log of every Jev request and response")
+    rp.add_argument("--trace-dir", type=Path, default=None,
+                    help="Where traces go (default: traces/)")
     rp.add_argument("--json", action="store_true", help="Emit the session log as JSON")
     rp.add_argument(
         "--adapter",
@@ -267,6 +300,10 @@ def main(argv: list[str] | None = None) -> int:
     gt.add_argument("--db", type=Path, default=Path("sessions.db"))
     gt.add_argument("--target", type=int, default=10, help="Sessions the gate needs")
 
+    tr = sub.add_parser("traces", help="List session traces, or delete them")
+    tr.add_argument("--dir", type=Path, default=None)
+    tr.add_argument("--purge", action="store_true", help="Delete every trace")
+
     bd = sub.add_parser("board", help="Show the extracted state of a whiteboard")
     bd.add_argument("board", type=Path,
                     help="An .excalidraw export or a screenshot")
@@ -289,8 +326,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="Session log. Recording is on by default; pass --no-db to skip")
     lv.add_argument("--no-db", action="store_true", help="Do not record this session")
     lv.add_argument("--adapter", choices=["fake", "typesafe"], default="typesafe")
-    lv.add_argument("--trace", type=Path, default=None,
-                    help="Append every Jev request and response to this JSONL file")
+    lv.add_argument("--trace", action="store_true",
+                    help="Write a per-session log of every Jev request and response")
+    lv.add_argument("--trace-dir", type=Path, default=None,
+                    help="Where traces go (default: traces/)")
     lv.add_argument("--my-role", choices=["interviewer", "candidate"],
                     default="interviewer",
                     help="Which side of the interview YOU are on. Pass 'candidate' "
@@ -327,6 +366,9 @@ def main(argv: list[str] | None = None) -> int:
             print("Multi-Output Device that includes BlackHole (menu bar: option-click")
             print("the volume icon), not to your headset directly.")
         return 0
+
+    if args.command == "traces":
+        return _traces(args)
 
     if args.command == "label":
         from .label import run as run_label
@@ -396,8 +438,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "replay":
         if args.adapter == "typesafe":
             from .jev.typesafe import TypeSafeJevAdapter
+            from .trace import Trace
 
-            adapter = TypeSafeJevAdapter(trace_path=args.trace)
+            adapter = TypeSafeJevAdapter(
+                trace=Trace.for_session("replay", args.trace_dir) if args.trace else None)
         else:
             adapter = FakeJevAdapter()
             print("using the FAKE adapter: output exercises the pipeline, not Jev", file=sys.stderr)

@@ -31,6 +31,9 @@ class LiveSession:
     #: Persist as the session runs, not at the end. An interview that crashes or
     #: is closed abruptly is exactly the one worth having a record of.
     store: SessionStore | None = None
+    #: One file per session: lifecycle plus every Jev call. Same object the
+    #: adapter writes to, so the whole interview reads in order.
+    trace: object | None = None
     session_id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     events: queue.Queue = field(default_factory=queue.Queue)
     state: RollingState = field(default_factory=RollingState)
@@ -51,8 +54,13 @@ class LiveSession:
     #: dead air, which would then be labelled as a bad card during the gate.
     _pause_offset_ms: int = 0
 
+    def _t(self, kind: str, **fields: object) -> None:
+        if self.trace is not None:
+            self.trace.event(kind, **fields)
+
     def __post_init__(self) -> None:
         self._next_tick = self.tick_ms
+        self._t("session_created", session_id=self.session_id, tick_ms=self.tick_ms)
         if self.store is not None:
             self.store.save_session(Session(
                 id=self.session_id,
@@ -103,6 +111,7 @@ class LiveSession:
         if self.mode in ("running", "stopped"):
             return
         self._pause_offset_ms += max(0, self._last_raw_ms - self._pause_began_raw)
+        first = self.mode == "standby"
         if self.mode == "standby":
             # First start: the clock begins now, not when capture did.
             self._pause_offset_ms = self._last_raw_ms
@@ -111,6 +120,7 @@ class LiveSession:
             # Do not fire a tick the instant we resume.
             self._next_tick = (self._last_raw_ms - self._pause_offset_ms) + self.tick_ms
         self.mode = "running"
+        self._t("started" if first else "resumed", elapsed_ms=self.state.now_ms)
         self.emit({"type": "mode", "mode": self.mode})
 
     def pause(self) -> None:
@@ -118,10 +128,13 @@ class LiveSession:
             return
         self.mode = "paused"
         self._pause_began_raw = self._last_raw_ms
+        self._t("paused", elapsed_ms=self.state.now_ms)
         self.emit({"type": "mode", "mode": self.mode})
 
     def stop(self) -> None:
         self.mode = "stopped"
+        self._t("stopped", elapsed_ms=self.state.now_ms,
+                paused_ms=self._pause_offset_ms, utterances=self._index)
         self.emit({"type": "mode", "mode": self.mode,
                    "session_id": self.session_id,
                    "duration_ms": self.state.now_ms})
