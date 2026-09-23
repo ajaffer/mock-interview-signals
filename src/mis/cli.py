@@ -157,7 +157,9 @@ def _live(args) -> int:
     if args.adapter == "typesafe":
         from .jev.typesafe import TypeSafeJevAdapter
 
-        adapter = TypeSafeJevAdapter()
+        adapter = TypeSafeJevAdapter(trace_path=args.trace)
+        if args.trace:
+            print(f"tracing Jev traffic to {args.trace}", file=sys.stderr)
     else:
         adapter = FakeJevAdapter()
         print("FAKE adapter: the strip will move, but the judgments are keyword "
@@ -222,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
     rp.add_argument("--db", type=Path, default=None, help="SQLite session log path")
     rp.add_argument("--tick-ms", type=int, default=15_000)
     rp.add_argument("--show-suppressed", action="store_true")
+    rp.add_argument("--trace", type=Path, default=None,
+                    help="Append every Jev request and response to this JSONL file")
     rp.add_argument("--json", action="store_true", help="Emit the session log as JSON")
     rp.add_argument(
         "--adapter",
@@ -285,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Session log. Recording is on by default; pass --no-db to skip")
     lv.add_argument("--no-db", action="store_true", help="Do not record this session")
     lv.add_argument("--adapter", choices=["fake", "typesafe"], default="typesafe")
+    lv.add_argument("--trace", type=Path, default=None,
+                    help="Append every Jev request and response to this JSONL file")
     lv.add_argument("--my-role", choices=["interviewer", "candidate"],
                     default="interviewer",
                     help="Which side of the interview YOU are on. Pass 'candidate' "
@@ -391,7 +397,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.adapter == "typesafe":
             from .jev.typesafe import TypeSafeJevAdapter
 
-            adapter = TypeSafeJevAdapter()
+            adapter = TypeSafeJevAdapter(trace_path=args.trace)
         else:
             adapter = FakeJevAdapter()
             print("using the FAKE adapter: output exercises the pipeline, not Jev", file=sys.stderr)

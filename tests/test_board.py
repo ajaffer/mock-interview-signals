@@ -351,3 +351,72 @@ def test_stop_is_terminal():
     assert s.mode == "stopped"
     s.start()
     assert s.mode == "stopped", "start must not revive a stopped session"
+
+
+# -- Jev traffic tracing --------------------------------------------------
+
+class _FakeNoul:
+    def __init__(self, v): self.noul = v
+
+
+class _FakeResult:
+    model = "jev-1.13.0"
+    def __init__(self):
+        self.nouls = {"answered_question": _FakeNoul(0.08)}
+        self.choices, self.scores = {}, {}
+        self.usage = type("U", (), {"input_tokens": 1809, "output_tokens": 123})()
+
+
+class _FakeTSClient:
+    def system_one(self, state, questions):
+        return _FakeResult()
+
+
+def _answered_spec():
+    from mis.signals import SIGNAL_SET
+    return [s for s in SIGNAL_SET if s.name == "answered_question"]
+
+
+def test_trace_records_both_directions(tmp_path):
+    from mis.jev.typesafe import TypeSafeJevAdapter
+
+    path = tmp_path / "jev.trace.jsonl"
+    a = TypeSafeJevAdapter(client=_FakeTSClient(), trace_path=path)
+    a.evaluate({"recent_transcript": [{"speaker": "candidate", "text": "hi"}]},
+               _answered_spec(), window_start_ms=0, window_end_ms=20_000)
+
+    rec = json.loads(path.read_text().strip())
+    assert rec["request"]["state"]["recent_transcript"][0]["text"] == "hi"
+    assert rec["request"]["questions"]["answered_question"]["type"] == "noul"
+    assert "instructions" in rec["request"]["questions"]["answered_question"]
+    assert rec["response"]["answered_question"] == {"type": "noul", "noul": 0.08}
+    # A Noul has no confidence; the trace must not invent one.
+    assert "confidence" not in rec["response"]["answered_question"]
+    assert rec["usage"]["request_input_tokens"] == 1809
+    assert rec["cost_cents"] > 0
+
+
+def test_trace_records_failures_too(tmp_path):
+    """The call you most want logged is the one that broke."""
+    from mis.jev.typesafe import TypeSafeJevAdapter
+
+    class Boom:
+        def system_one(self, *a, **k):
+            raise RuntimeError("upstream exploded")
+
+    path = tmp_path / "jev.trace.jsonl"
+    a = TypeSafeJevAdapter(client=Boom(), trace_path=path)
+    with pytest.raises(RuntimeError):
+        a.evaluate({}, _answered_spec(), window_start_ms=0, window_end_ms=1)
+
+    rec = json.loads(path.read_text().strip())
+    assert "upstream exploded" in rec["error"]
+    assert "request" in rec
+
+
+def test_no_trace_file_unless_asked(tmp_path):
+    from mis.jev.typesafe import TypeSafeJevAdapter
+
+    a = TypeSafeJevAdapter(client=_FakeTSClient())
+    a.evaluate({}, _answered_spec(), window_start_ms=0, window_end_ms=1)
+    assert list(tmp_path.iterdir()) == []

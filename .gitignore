@@ -12,6 +12,8 @@ venv/
 
 # Local env + data
 .env
+# Jev traffic logs: contain transcript text
+*.trace.jsonl
 *.db
 *.sqlite3
 data/local/

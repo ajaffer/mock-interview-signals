@@ -8,8 +8,11 @@ being re-sent once per signal.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 
 from ..models import Primitive, SignalDecision
 from ..signals import SignalSpec
@@ -26,7 +29,20 @@ def _shift_levels(probabilities: dict | None) -> dict | None:
 class TypeSafeJevAdapter:
     """Thin wrapper over `client.system_one`. Requires TYPESAFE_API_KEY."""
 
-    def __init__(self, client: object | None = None) -> None:
+    def __init__(self, client: object | None = None,
+                 trace_path: str | Path | None = None) -> None:
+        """`trace_path` appends one JSON line per call: what went out, what came
+        back, how long it took and what it cost.
+
+        The session log records normalized decisions, which is the right shape
+        for replay and reports but useless when the question is "what did we
+        actually ask it". This is the other view, and it belongs here because
+        the adapter is the only place that knows Jev's wire shape.
+
+        The trace contains transcript text, so it is written wherever you point
+        it and gitignored by default. Off unless asked for.
+        """
+        self._trace_path = Path(trace_path) if trace_path else None
         if client is None:
             try:
                 from typesafe_sdk import TypeSafeClient
@@ -37,6 +53,46 @@ class TypeSafeJevAdapter:
                 ) from exc
             client = TypeSafeClient()
         self._client = client
+
+    def _trace(self, record: dict) -> None:
+        if self._trace_path is None:
+            return
+        self._trace_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._trace_path.open("a") as fh:
+            fh.write(json.dumps(record, default=str) + "\n")
+
+    @staticmethod
+    def _as_dict(specs: Sequence[SignalSpec]) -> dict:
+        """The questions as JSON, mirroring what the SDK serializes."""
+        out: dict = {}
+        for spec in specs:
+            q: dict = {"type": spec.primitive.value, "instructions": spec.instructions}
+            if spec.criteria:
+                q["criteria"] = spec.criteria
+            out[spec.name] = q
+        return out
+
+    @staticmethod
+    def _answers(result: object, specs: Sequence[SignalSpec]) -> dict:
+        """Answers as JSON, in the shape the HTTP API returns them."""
+        out: dict = {}
+        for spec in specs:
+            match spec.primitive:
+                case Primitive.CHOICE:
+                    a = result.choices[spec.name]
+                    out[spec.name] = {"type": "choice", "choice": a.choice,
+                                      "confidence": getattr(a, "confidence", None),
+                                      "probabilities": getattr(a, "probabilities", None)}
+                case Primitive.SCORE:
+                    a = result.scores[spec.name]
+                    out[spec.name] = {"type": "score", "score": a.score,
+                                      "confidence": getattr(a, "confidence", None),
+                                      "probabilities": getattr(a, "probabilities", None)}
+                case Primitive.NOUL:
+                    # No confidence here on purpose: a Noul has none.
+                    out[spec.name] = {"type": "noul",
+                                      "noul": result.nouls[spec.name].noul}
+        return out
 
     def _build_questions(self, specs: Sequence[SignalSpec]) -> dict:
         from typesafe_sdk import Choice, Noul, Score
@@ -73,13 +129,36 @@ class TypeSafeJevAdapter:
 
         questions = self._build_questions(specs)
         started = time.perf_counter()
-        result = self._client.system_one(state, questions)
+        try:
+            result = self._client.system_one(state, questions)
+        except Exception as exc:
+            # A failed call is the one you most want in the log.
+            self._trace({
+                "at": datetime.now(UTC).isoformat(),
+                "window_ms": [window_start_ms, window_end_ms],
+                "request": {"state": state, "questions": self._as_dict(specs)},
+                "error": f"{type(exc).__name__}: {exc}",
+                "latency_ms": round((time.perf_counter() - started) * 1000),
+            })
+            raise
         latency_ms = (time.perf_counter() - started) * 1000
         usage = getattr(result, "usage", None)
         tokens = {
             "request_input_tokens": getattr(usage, "input_tokens", None),
             "request_output_tokens": getattr(usage, "output_tokens", None),
         }
+
+        self._trace({
+            "at": datetime.now(UTC).isoformat(),
+            "window_ms": [window_start_ms, window_end_ms],
+            "latency_ms": round(latency_ms),
+            "model": getattr(result, "model", None),
+            "usage": {k: v for k, v in tokens.items()},
+            "cost_cents": round((tokens.get("request_input_tokens") or 0)
+                                * 0.042 / 1e6 * 100, 5),
+            "request": {"state": state, "questions": self._as_dict(specs)},
+            "response": self._answers(result, specs),
+        })
 
         decisions: list[SignalDecision] = []
         for spec in specs:
