@@ -5,12 +5,28 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from .jev.fake import FakeJevAdapter
 from .models import Speaker
 from .replay import ReplayResult, replay
 from .store import SessionStore
+
+
+def _local(iso: str | None) -> str:
+    """A stored UTC timestamp, shown in the timezone you were sitting in.
+
+    Times are stored as UTC with an offset, which is right. Printing that
+    string verbatim was not: an interview finished at 1:45pm listed as 20:45,
+    which is the kind of thing you silently learn to mistrust.
+    """
+    if not iso:
+        return ""
+    try:
+        return datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return iso[:16].replace("T", " ")
 
 
 def _fmt_ms(ms: int) -> str:
@@ -71,6 +87,39 @@ def _sessions(args) -> int:
 
     store = SessionStore(args.db)
     try:
+        if args.delete:
+            sid = resolve_session_id(str(args.db), args.delete)
+            row = next((r for r in store.sessions() if r["id"] == sid), None)
+            length = (row["duration_ms"] or 0) // 1000 if row else 0
+            print(f"{sid}  {length // 60}:{length % 60:02d}  {row['notes'] or ''}"
+                  if row else sid)
+
+            if not args.yes:
+                # Deleting is right for a rehearsal. A real interview that went
+                # wrong should be excluded in `cue label` instead, which keeps
+                # the data and records why it does not count.
+                print("\nThis removes the transcript, every judgment and any labels.")
+                print("A real session with bad audio should be excluded in "
+                      "'cue label', not deleted.")
+                if input("Type the word delete to confirm: ").strip() != "delete":
+                    print("Left alone.")
+                    return 0
+
+            removed = store.delete_session(sid)
+            for table, n in removed.items():
+                print(f"  removed {n} from {table}")
+            print("database rebuilt, so the text is gone rather than unreferenced")
+
+            from .trace import listing
+
+            stale = [p for p, *_ in listing() if sid in p.name]
+            if stale:
+                print("\nThis session also has a trace, which holds the transcript:")
+                for path in stale:
+                    print(f"  {path}")
+                print("  delete it with 'cue traces --purge'")
+            return 0
+
         if args.note:
             target, text = args.note
             sid = resolve_session_id(str(args.db), target)
@@ -86,7 +135,7 @@ def _sessions(args) -> int:
         print(f"{'id':<14}{'when':<18}{'source':<9}{'length':>8}{'shown':>7}"
               f"{'report':>8}  notes")
         for r in rows:
-            when = (r["started_at"] or "")[:16].replace("T", " ")
+            when = _local(r["started_at"])
             ms = r["duration_ms"] or 0
             length = f"{ms // 60000}:{(ms // 1000) % 60:02d}"
             print(f"{r['id']:<14}{when:<18}{r['source_type']:<9}{length:>8}"
@@ -321,6 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     ss.add_argument("--db", type=Path, default=Path("sessions.db"))
     ss.add_argument("--note", nargs=2, metavar=("SESSION", "TEXT"),
                     help="Attach a note to a session")
+    ss.add_argument("--delete", metavar="SESSION",
+                    help="Delete a session and everything derived from it")
+    ss.add_argument("--yes", action="store_true", help="Skip the confirmation")
 
     rp2 = sub.add_parser("report", help="Evidence pack from a recorded session")
     rp2.add_argument("session", nargs="?", default=None,

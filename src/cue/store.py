@@ -258,6 +258,29 @@ class SessionStore:
                                (notes, session_id))
             self._conn.commit()
 
+    #: Every table keyed by a session. Order matters: children before the parent.
+    SESSION_TABLES = ("card_labels", "session_labels", "reports",
+                      "signal_decisions", "transcript_chunks", "sessions")
+
+    def delete_session(self, session_id: str) -> dict[str, int]:
+        """Remove a session and everything derived from it, then VACUUM.
+
+        The VACUUM is not housekeeping. Deleting rows leaves the bytes in the
+        file's free pages, so a transcript stays readable with `strings` until
+        the database is rebuilt. Anything holding interview speech has to be
+        actually gone, not just unreferenced.
+        """
+        removed: dict[str, int] = {}
+        for table in self.SESSION_TABLES:
+            column = "id" if table == "sessions" else "session_id"
+            cur = self._conn.execute(
+                f"DELETE FROM {table} WHERE {column}=?", (session_id,))  # noqa: S608
+            if cur.rowcount:
+                removed[table] = cur.rowcount
+        self._conn.commit()
+        self._conn.execute("VACUUM")
+        return removed
+
     def chunks(self, session_id: str) -> list[sqlite3.Row]:
         return list(self._conn.execute(
             "SELECT * FROM transcript_chunks WHERE session_id=? ORDER BY idx",

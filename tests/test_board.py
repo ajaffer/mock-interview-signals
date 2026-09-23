@@ -501,3 +501,61 @@ def test_summary_survives_a_session_that_never_ticked(tmp_path):
     assert out["duration"] == "0:00"
     assert out["phases"] == [] and out["cards"] == []
     store.close()
+
+
+# -- discarding a session -------------------------------------------------
+
+def test_delete_removes_every_trace_of_a_session(tmp_path):
+    from cue.models import Session, SourceType, Speaker, TranscriptChunk
+    from cue.store import SessionStore
+
+    store = SessionStore(tmp_path / "s.db")
+    for sid in ("keep", "junk"):
+        store.save_session(Session(id=sid, source_type=SourceType.LIVE, source_ref="live"))
+        store.save_chunks(sid, [TranscriptChunk(index=0, offset_ms=0,
+                                                speaker=Speaker.CANDIDATE,
+                                                text=f"words from {sid}")])
+    store.save_session_label("junk", told_new=False, misfired=False,
+                             attention_cost="none")
+    store.save_report("junk", "a report")
+
+    removed = store.delete_session("junk")
+    assert "sessions" in removed and "transcript_chunks" in removed
+
+    assert [r["id"] for r in store.sessions()] == ["keep"]
+    assert store.chunks("junk") == []
+    assert store.session_label("junk") is None
+    assert store.load_report("junk") is None
+    # The untouched session must be entirely unaffected.
+    assert len(store.chunks("keep")) == 1
+    store.close()
+
+
+def test_delete_vacuums_so_the_text_is_really_gone(tmp_path):
+    """Deleted rows leave readable bytes in free pages until the file is rebuilt."""
+    from cue.models import Session, SourceType, Speaker, TranscriptChunk
+    from cue.store import SessionStore
+
+    path = tmp_path / "s.db"
+    store = SessionStore(path)
+    store.save_session(Session(id="x", source_type=SourceType.LIVE, source_ref="live"))
+    store.save_chunks("x", [TranscriptChunk(index=0, offset_ms=0,
+                                            speaker=Speaker.CANDIDATE,
+                                            text="distinctive phrase zzyzx")])
+    assert b"zzyzx" in path.read_bytes()
+    store.delete_session("x")
+    assert b"zzyzx" not in path.read_bytes()
+    store.close()
+
+
+def test_stored_utc_is_displayed_in_local_time():
+    """An interview finished at 1:45pm should not be listed as 20:45."""
+    from datetime import UTC, datetime
+
+    from cue.cli import _local
+
+    iso = "2026-09-23T20:45:30.503673+00:00"
+    expected = datetime.fromisoformat(iso).astimezone().strftime("%Y-%m-%d %H:%M")
+    assert _local(iso) == expected
+    assert _local(None) == ""
+    assert _local("not a timestamp") == "not a timestamp"[:16]
