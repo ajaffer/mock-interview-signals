@@ -244,8 +244,8 @@ def evaluate_component_coverage(
 
     The planning doc's "component exists on the board but has not been
     explained verbally" signal. One Noul per component, batched over shared
-    state. Fuzzy on purpose -- a box labelled `OffersListSvc` is explained by
-    someone saying "the offers listing service", which a string match misses
+    state. Fuzzy on purpose -- a box labelled `InvSvc` is explained by
+    someone saying "the inventory service", which a string match misses
     and Jev does not.
 
     Returns label -> probability it was explained. Labels that collide after
