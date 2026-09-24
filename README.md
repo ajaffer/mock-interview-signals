@@ -24,10 +24,10 @@ Stated up front because it is the part most likely to be overclaimed.
 | `answered_question` | **Known to miss.** Scored every exchange in one session as answered when at least two were not. |
 | `rambling_risk` | Fires rarely. A written prediction that it never would was falsified. |
 
-A usefulness gate on 2026-09-20 **failed**, not because a signal was wrong, but because
-it was right about something the interviewer had already noticed. Accuracy is not
-usefulness, and the gate is written to measure the second. `cue label` and `cue gate`
-exist to settle it with data rather than recollection.
+The bar is usefulness, not accuracy. An earlier gate failed on a signal that was correct
+and that the interviewer had already noticed, so the current one asks whether a signal
+told you something new, and whether looking at it cost you anything. Pre-registered in
+[docs/gate-v2.md](docs/gate-v2.md), collected by `cue label` and `cue gate`.
 
 Measured on a real 10-minute session: 119 judgments, 8 shown (**93% suppressed**), 81 of
 200 questions never sent because a precondition blocked them, **$0.0025** total (a quarter of a cent), **119ms**
