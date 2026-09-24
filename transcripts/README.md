@@ -1,6 +1,6 @@
 # Transcripts
 
-Sample transcripts for Phase 0 signal validation and Phase 1 replay. See [../docs/phase-0-signal-spec.md](../docs/phase-0-signal-spec.md) for the signal set these are meant to exercise.
+Sample transcripts for Phase 0 signal validation and Phase 1 replay. See [../ARCHITECTURE.md](../ARCHITECTURE.md) for the signal set these are meant to exercise.
 
 ## Status
 
@@ -56,7 +56,7 @@ Optional first line for session metadata:
 {"_meta": {"id": "sample-001", "interview_type": "system_design", "prompt": "Design a URL shortener", "source": "synthetic"}}
 ```
 
-Settled as ADR 003 in [../docs/jev-architecture.md](../docs/jev-architecture.md). Rationale for JSONL over other formats: it streams line by line, which makes simulated replay trivial; it diffs cleanly in git; and most transcription exports convert to it in a few lines of code.
+Rationale for JSONL over other formats: it streams line by line, which makes simulated replay trivial; it diffs cleanly in git; and most transcription exports convert to it in a few lines of code.
 
 ## Labels
 

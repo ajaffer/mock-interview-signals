@@ -184,8 +184,7 @@ RAMBLING_RISK = SignalSpec(
 
 #: CUT in v0.2. Inverted against human judgment across five real runs, and all
 #: three rewrites inverted too. Kept defined for the record and for anyone
-#: re-testing it; deliberately absent from SIGNAL_SET. See the evidence section
-#: in docs/phase-0-signal-spec.md.
+#: re-testing it; deliberately absent from SIGNAL_SET.
 TRADEOFF_COVERAGE = SignalSpec(
     name="tradeoff_coverage",
     primitive=Primitive.NOUL,

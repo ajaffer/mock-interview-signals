@@ -70,7 +70,9 @@ export TYPESAFE_API_KEY=...
 ```
 
 First run downloads a Whisper model, so do that before an interview rather than during
-one. `docs/RUNBOOK.md` has the full procedure and the failure modes.
+one, and run `cue devices --check` beforehand: if the loopback device reads silent you
+capture only your own voice, which is the failure that ruins a whole session and gives
+no sign until afterwards.
 
 ## Quick start
 

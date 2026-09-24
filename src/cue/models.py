@@ -4,7 +4,7 @@ The one asymmetry worth knowing before reading anything else: TypeSafe's Noul
 primitive returns a probability and *no* confidence value -- the probability is
 the confidence. Choice and Score do carry a separate confidence. `SignalDecision`
 therefore cannot assume both numbers are present, and `confidence` is None for
-every Noul-backed signal. See ADR 005 in docs/jev-architecture.md.
+every Noul-backed signal.
 """
 
 from __future__ import annotations

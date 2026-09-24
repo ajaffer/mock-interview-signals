@@ -1,5 +1,6 @@
 """Policy is where a correct signal becomes bad product behavior, so it carries
-the densest tests. Each one encodes a rule from docs/phase-0-signal-spec.md."""
+the densest tests. Each one encodes a display rule: confidence floors, minimum
+deltas, phase dwell, cooldowns, and the display budget."""
 
 from __future__ import annotations
 
