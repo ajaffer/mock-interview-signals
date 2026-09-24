@@ -198,9 +198,11 @@ benchmark. Being right is not the bar.
 
 ## Transcripts
 
-`transcripts/fixtures/` holds synthetic transcripts and is tracked. `transcripts/private/`
-is for real ones and is gitignored, the directory is default-deny, so anything dropped
-there is ignored unless explicitly allow-listed.
+`transcripts/fixtures/` holds synthetic transcripts, and is what the tests and the demo
+run against.
+
+Put real interview transcripts in `transcripts/private/`. Nothing in that directory is
+ever committed.
 
 ## Tests
 
@@ -209,4 +211,4 @@ there is ignored unless explicitly allow-listed.
 ./.venv/bin/ruff check .
 ```
 
-Tests build their own fixtures inline, so they do not depend on anything gitignored.
+The suite needs nothing beyond what is in the repo, so it runs on a fresh clone.
