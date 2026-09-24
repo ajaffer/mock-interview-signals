@@ -33,6 +33,45 @@ Measured on a real 10-minute session: 119 judgments, 8 shown (**93% suppressed**
 200 questions never sent because a precondition blocked them, **$0.0025** total (a quarter of a cent), **119ms**
 median per batched call.
 
+## Try it
+
+Three levels, by how much setup you are willing to do.
+
+**1. Watch a recorded session.** Nothing to install:
+[ajaffer.github.io/interview-signals.html](https://ajaffer.github.io/interview-signals.html)
+
+**2. Run the real thing against a recorded transcript.** Five minutes, no API key, no
+microphone, any operating system:
+
+```bash
+git clone https://github.com/ajaffer/mock-interview-signals.git
+cd mock-interview-signals
+python3 -m venv .venv && ./.venv/bin/pip install -e ".[live]"
+
+./.venv/bin/cue live --simulate transcripts/fixtures/sample-001-url-shortener.jsonl \
+  --speed 10 --adapter fake
+```
+
+Open <http://127.0.0.1:8765>, press **Start**, and watch it run at ten times speed.
+`--adapter fake` substitutes keyword heuristics for the model, so this needs no
+credentials. The judgments are not real, but the pipeline, the suppression and the
+end-of-session summary all are.
+
+Swap in `--adapter typesafe` with a `TYPESAFE_API_KEY` for real judgments over the same
+transcript, for about a cent.
+
+**3. Use it in an actual interview.** macOS only, and the audio setup is the fiddly part:
+
+```bash
+./.venv/bin/pip install -e ".[all]"
+brew install blackhole-2ch          # then build a Multi-Output Device
+export TYPESAFE_API_KEY=...
+./.venv/bin/cue live --mic <name> --system BlackHole
+```
+
+First run downloads a Whisper model, so do that before an interview rather than during
+one. `docs/RUNBOOK.md` has the full procedure and the failure modes.
+
 ## Quick start
 
 ```bash

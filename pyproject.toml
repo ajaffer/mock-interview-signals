@@ -8,9 +8,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The live strip: local web server and the signal UI. Everything except audio,
+# so `cue live --simulate` runs a whole rehearsal with no microphone and no key.
+live = ["fastapi>=0.110", "uvicorn>=0.27"]
+# Audio capture and local transcription. macOS only in practice: capture shells
+# out to ffmpeg's avfoundation input.
+audio = ["numpy>=1.26", "faster-whisper>=1.0"]
 jev = ["typesafe-sdk"]
 vision = ["anthropic"]
 dev = ["pytest>=8", "ruff>=0.5"]
+# Everything, for someone who wants to run it in a real interview.
+all = [
+    "fastapi>=0.110", "uvicorn>=0.27",
+    "numpy>=1.26", "faster-whisper>=1.0",
+    "typesafe-sdk", "anthropic",
+]
 
 [project.scripts]
 cue = "cue.cli:main"
