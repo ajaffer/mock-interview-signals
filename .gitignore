@@ -29,7 +29,7 @@ CLAUDE.md
 
 # Exception: the gate pre-registration. A commitment device only works if it is
 # committed and timestamped before the data exists, so this one is tracked.
-!docs/gate-v2.md
+!docs/usefulness-gate.md
 
 # Interview transcripts: default-deny. Real transcripts are sensitive and must
 # never be tracked. Only synthetic fixtures are allow-listed.

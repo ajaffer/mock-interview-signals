@@ -1,6 +1,10 @@
-# Gate v2
+# The usefulness gate
 
 Written before session 1. Not changed after that.
+
+This is the second attempt. The first failed on a signal that was accurate and
+that I had already noticed, which is why the criteria below are about novelty
+and attention cost rather than correctness.
 
 ## What I am testing
 
